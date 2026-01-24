@@ -5,6 +5,7 @@
 ![LightGBM](https://img.shields.io/badge/LightGBM-AI_Engine-green.svg)
 ![HMM](https://img.shields.io/badge/HMM-Risk_Control-red.svg)
 ![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-orange.svg)
+![Optuna](https://img.shields.io/badge/Optimization-Optuna-orange.svg)
 
 AlphaBase is an event-driven, institutional-grade quantitative trading system designed for multi-asset portfolios. It integrates **PostgreSQL** for high-performance data engineering, **LightGBM** for Alpha generation, and **Hidden Markov Models (HMM)** for macro-level risk management.
 
@@ -65,3 +66,28 @@ streamlit run src/app.py
 [ ] Connect with Interactive Brokers (IBKR) API for live automated trading.
 
 ---
+
+## 📝 Theory: Triple Barrier Method
+本專案採用 Marcos López de Prado 提出的標註法。對於每一個觀測點 $t$，我們定義三個邊界：
+1.  **Upper Barrier (Profit Taking)**:  
+    $$P_t \cdot (1 + \sigma_t \cdot M_{pt})$$
+2.  **Lower Barrier (Stop Loss)**:  
+    $$P_t \cdot (1 - \sigma_t \cdot M_{sl})$$
+3.  **Vertical Barrier (Time)**:  
+    $$t + \text{days}$$
+
+其中 $\sigma_t$ 為動態波動率，$M$ 為乘數。
+
+標籤 $Y_i$ 根據價格路徑 $P_{t \to T}$ **首先觸碰到**的邊界決定：
+
+$$
+Y_i = \begin{cases} 
+1 & \text{if touches Upper Barrier first (Win)} \\
+-1 & \text{if touches Lower Barrier first (Loss)} \\
+0 & \text{if touches Vertical Barrier (Time out)}
+\end{cases}
+$$
+## 📬 Contact
+- Author: Willy Tsai
+- Email: Willy100693@gmail.com
+- LinkedIn: www.linkedin.com/in/維宸-蔡-812275214
