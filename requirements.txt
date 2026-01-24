@@ -18,3 +18,7 @@ matplotlib>=3.6.0
 # Utilities
 python-dotenv>=1.0.0
 tqdm>=4.65.0
+
+hmmlearn
+streamlit 
+plotly
