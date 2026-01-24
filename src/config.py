@@ -28,5 +28,6 @@ FEATURES = ['rsi_14', 'bollinger_upper', 'bollinger_lower', 'log_return', 'ma_20
 # 模型存檔路徑
 MODEL_PATHS = {
     'lgbm': 'alphabase_lgbm.pkl',
-    'hmm': 'hmm_model.pkl' # 預留給未來的 HMM 模型
+    'hmm': 'hmm_model.pkl', # 預留給未來的 HMM 模型
+    'meta': 'alphabase_meta.pkl'
 }
