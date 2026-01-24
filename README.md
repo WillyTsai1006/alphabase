@@ -67,6 +67,7 @@ streamlit run src/app.py
 
 ## 🔮 Future Work
 [ ] Connect with Interactive Brokers (IBKR) API for live automated execution.
+
 [ ] Incorporate Alternative Data (VIX, Put/Call Ratio, Crypto On-chain Data) into the HMM radar.
 
 
