@@ -41,7 +41,7 @@ Under strict out-of-sample (OOS) testing with transaction costs, the V3.0 portfo
 
 ### 🖥️ Interactive Dashboard
 
-![AlphaBase V3.0 Dashboard](v3_dashboard.png)
+![AlphaBase V3.0 Dashboard](./assets/v3_dashboard.png)
 
 ## 🚀 How to Run (本地運行)
 
