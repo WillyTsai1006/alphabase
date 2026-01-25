@@ -40,8 +40,8 @@ Under strict out-of-sample (OOS) testing with transaction costs, the V3.0 portfo
 - **Max Drawdown**: Maintained at institutional standards via HMM crash detection.
 
 ### 🖥️ Interactive Dashboard
-*(💡 提示：請將你剛才看到的 1200 萬美元網頁截圖放在這裡，命名為 dashboard_v3.png)*
-![AlphaBase V3.0 Dashboard](dashboard_v3.png)
+
+![AlphaBase V3.0 Dashboard](v3_dashboard.png)
 
 ## 🚀 How to Run (本地運行)
 

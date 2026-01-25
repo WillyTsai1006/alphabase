@@ -12,7 +12,7 @@ DB_CONFIG = {
 }
 DB_URI = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['dbname']}"
 # 2. 交易標的與回測配置 (Trading & Backtest)
-TARGET_SYMBOLS = ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'SPY']
+TARGET_SYMBOLS = ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'SPY', 'INTC', 'PYPL', 'PFE', 'ZM']
 BENCHMARK_SYMBOL = 'SPY'
 BACKTEST_PARAMS = {
     'initial_capital': 100000,
