@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 import joblib
 from sqlalchemy import text
 st.set_page_config(page_title="AlphaBase Quant V3.0", page_icon="📈", layout="wide")
-from config import MODEL_PATHS, BACKTEST_PARAMS
+from config import MODEL_PATHS, BACKTEST_PARAMS, RESEARCH_CONFIG
 from utils import get_logger, db_manager
 from quant_engine import DataAndLabelEngine
 from meta_engine import load_meta_artifact
@@ -77,7 +77,11 @@ threshold_val = st.sidebar.slider("主模型初篩門檻", 0.50, 0.70, BACKTEST_
 st.sidebar.markdown("---")
 st.sidebar.success("✅ **Meta-Labeling 次模型**: 啟動中\n\n✅ **HMM 崩盤防禦**: 啟動中\n\n✅ **Kelly 倉位**: 需通過校準報告才啟用")
 st.title("AlphaBase 量化戰情室 V3.0 📊")
-st.markdown("全球頂級對沖基金架構：**主模型找機會 ➜ Meta 模型算勝率 ➜ 凱利公式定注碼 ➜ HMM 避股災**")
+st.markdown("互動檢視：**主模型找機會 ➜ Meta 模型算勝率 ➜ 校準通過才使用 Kelly ➜ HMM 避股災**")
+st.info(
+    "此頁可調整參數做互動回測，正式績效請以固定研究報告為準："
+    f"`{RESEARCH_CONFIG['artifact_paths']['report']}`。"
+)
 if not selected_symbols: st.stop()
 with st.spinner('🚀 正在運行雙重 AI 與凱利動態回測...'):
     try:
@@ -89,7 +93,21 @@ with st.spinner('🚀 正在運行雙重 AI 與凱利動態回測...'):
         logger.error(f"回測執行失敗: {exc}")
         st.error(f"回測執行失敗：{exc}")
         st.stop()
-if equity_df.empty or trades_df.empty: st.stop()
+if equity_df.empty:
+    st.warning("此參數組合沒有可顯示的資產曲線。")
+    st.stop()
+if trades_df.empty:
+    final_cap = equity_df['equity'].iloc[-1]
+    total_ret = (final_cap / BACKTEST_PARAMS['initial_capital']) - 1
+    st.warning("此互動回測在目前校準門檻與風控設定下沒有產生交易。")
+    col1, col2 = st.columns(2)
+    col1.metric("最終資產", f"${final_cap:,.0f}", f"{total_ret:.2%}")
+    col2.metric("總交易次數", "0 次")
+    st.plotly_chart(
+        px.line(equity_df, x=equity_df.index, y='equity', title='資金曲線 (無交易)', template='plotly_dark'),
+        use_container_width=True,
+    )
+    st.stop()
 final_cap = equity_df['equity'].iloc[-1]
 total_ret = (final_cap / BACKTEST_PARAMS['initial_capital']) - 1
 cum_max = equity_df['equity'].cummax()

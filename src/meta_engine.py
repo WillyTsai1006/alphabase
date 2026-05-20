@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import lightgbm as lgb
 from sklearn.metrics import precision_score
+from sklearn.linear_model import LogisticRegression
 import joblib
 import warnings
 from pathlib import Path
@@ -13,15 +14,32 @@ from research import compute_calibration_report, is_kelly_sizing_approved, load_
 warnings.filterwarnings('ignore')
 logger = get_logger("MetaEngine")
 
+class CalibratedMetaModel:
+    """Wrap the raw meta model with an optional probability calibrator."""
+    def __init__(self, model, calibrator=None):
+        self.model = model
+        self.calibrator = calibrator
+
+    def predict(self, X):
+        raw_prob = np.asarray(self.model.predict(X), dtype=float)
+        if self.calibrator is None:
+            return raw_prob
+        if hasattr(self.calibrator, 'predict_proba'):
+            return np.asarray(self.calibrator.predict_proba(raw_prob.reshape(-1, 1))[:, 1], dtype=float)
+        return np.asarray(self.calibrator.predict(raw_prob), dtype=float)
+
 def save_meta_model(model, threshold, path=MODEL_PATHS['meta'], calibration_report=None, kelly_sizing_approved=False):
     """保存 Meta 模型與最佳過濾門檻，避免訓練結果只留在 log。"""
+    raw_model = model.model if isinstance(model, CalibratedMetaModel) else model
+    calibrator = model.calibrator if isinstance(model, CalibratedMetaModel) else getattr(model, 'calibrator', None)
     artifact = {
-        'model': model,
+        'model': raw_model,
         'threshold': float(threshold),
         'features': FEATURES + ['primary_prob'],
         'base_threshold': BACKTEST_PARAMS['threshold'],
         'calibration_report': calibration_report,
         'kelly_sizing_approved': bool(kelly_sizing_approved),
+        'calibrator': calibrator,
     }
     joblib.dump(artifact, path)
     if path == MODEL_PATHS['meta']:
@@ -32,6 +50,8 @@ def save_meta_model(model, threshold, path=MODEL_PATHS['meta'], calibration_repo
 def load_meta_artifact(path=MODEL_PATHS['meta']):
     artifact = joblib.load(path)
     if isinstance(artifact, dict) and 'model' in artifact:
+        if artifact.get('calibrator') is not None and not isinstance(artifact['model'], CalibratedMetaModel):
+            artifact['model'] = CalibratedMetaModel(artifact['model'], artifact['calibrator'])
         return artifact
     return {
         'model': artifact,
@@ -102,23 +122,19 @@ class MetaLabelingEngine:
         meta_features = FEATURES + ['primary_prob']
         X = events[meta_features]
         y = events['meta_target']
-        split_date = X.index.get_level_values('time').max() - pd.Timedelta(days=180)
-        tr_mask = X.index.get_level_values('time') < split_date
-        eval_mask = X.index.get_level_values('time') >= split_date
+        event_dates = X.index.get_level_values('time').unique().sort_values()
+        if len(event_dates) < 5:
+            raise ValueError("Meta-Model 事件日期不足，無法建立訓練/調校/評估切分。")
+        tune_start = event_dates[int(len(event_dates) * 0.60)]
+        eval_start = event_dates[int(len(event_dates) * 0.80)]
+        tr_mask = X.index.get_level_values('time') < tune_start
+        tune_mask = (X.index.get_level_values('time') >= tune_start) & (X.index.get_level_values('time') < eval_start)
+        eval_mask = X.index.get_level_values('time') >= eval_start
         X_train, y_train = X[tr_mask], y[tr_mask]
+        X_tune, y_tune = X[tune_mask], y[tune_mask]
         X_eval, y_eval = X[eval_mask], y[eval_mask]
-        if X_train.empty or X_eval.empty:
-            raise ValueError("Meta-Model 訓練/評估切分資料不足，請增加歷史資料。")
-        eval_dates = X_eval.index.get_level_values('time').unique().sort_values()
-        if len(eval_dates) < 2:
-            raise ValueError("Meta-Model 評估資料日期不足，無法分離門檻搜尋與校準。")
-        calibration_start = eval_dates[len(eval_dates) // 2]
-        val_mask = X_eval.index.get_level_values('time') < calibration_start
-        cal_mask = X_eval.index.get_level_values('time') >= calibration_start
-        X_val, y_val = X_eval[val_mask], y_eval[val_mask]
-        X_cal, y_cal = X_eval[cal_mask], y_eval[cal_mask]
-        if X_val.empty or X_cal.empty:
-            raise ValueError("Meta-Model 門檻搜尋/校準切分資料不足，請增加歷史資料。")
+        if X_train.empty or X_tune.empty or X_eval.empty:
+            raise ValueError("Meta-Model 訓練/調校/評估切分資料不足，請增加歷史資料。")
         # 改回最強的 gbdt，並加強正規化 (L1/L2) 防止過擬合
         params = {
             'objective': 'binary',
@@ -133,22 +149,27 @@ class MetaLabelingEngine:
             'verbose': -1
         }
         meta_lgbm = lgb.train(params, lgb.Dataset(X_train, label=y_train), num_boost_round=100)
-        # 自動尋找最佳過濾門檻 (不再寫死 0.6)
-        val_preds = meta_lgbm.predict(X_val)
-        cal_preds = meta_lgbm.predict(X_cal)
+        raw_tune_preds = np.asarray(meta_lgbm.predict(X_tune), dtype=float)
+        raw_eval_preds = np.asarray(meta_lgbm.predict(X_eval), dtype=float)
+        calibrator = LogisticRegression(solver='lbfgs')
+        calibrator.fit(raw_tune_preds.reshape(-1, 1), y_tune)
+        calibrated_meta = CalibratedMetaModel(meta_lgbm, calibrator)
+        # 自動尋找最佳過濾門檻；調校集與最終校準報告分離。
+        val_preds = calibrated_meta.predict(X_tune)
+        eval_preds = calibrated_meta.predict(X_eval)
         calibration = compute_calibration_report(
-            y_cal,
-            cal_preds,
+            y_eval,
+            eval_preds,
         )
         kelly_approved = is_kelly_sizing_approved(calibration)
-        base_win_rate = y_val.mean()
+        base_win_rate = y_tune.mean()
         # 尋找能讓勝率提升的最大門檻
         best_threshold = 0.5
         best_win_rate = base_win_rate
         for thresh in np.arange(0.5, 0.8, 0.05):
             filtered_preds = val_preds > thresh
             if filtered_preds.sum() > 10: # 確保至少保留 10 筆交易
-                filtered_win_rate = precision_score(y_val, filtered_preds, zero_division=0)
+                filtered_win_rate = precision_score(y_tune, filtered_preds, zero_division=0)
                 if filtered_win_rate > best_win_rate:
                     best_win_rate = filtered_win_rate
                     best_threshold = thresh
@@ -160,9 +181,9 @@ class MetaLabelingEngine:
             f"ECE={calibration['expected_calibration_error']:.4f}, "
             f"Kelly sizing approved={kelly_approved}"
         )
-        save_meta_model(meta_lgbm, best_threshold, calibration_report=calibration, kelly_sizing_approved=kelly_approved)
+        save_meta_model(calibrated_meta, best_threshold, calibration_report=calibration, kelly_sizing_approved=kelly_approved)
         logger.info("💾 Meta-Model 已保存。")
-        return meta_lgbm, best_threshold, calibration
+        return calibrated_meta, best_threshold, calibration
 
 if __name__ == "__main__":
     from config import TARGET_SYMBOLS

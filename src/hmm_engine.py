@@ -46,11 +46,16 @@ class MarketRegimeModel:
         df['regime'] = self.model.predict(X)
         # 統計每個狀態的「平均報酬率」與「平均波動率」
         stats = df.groupby('regime')[['log_return', 'volatility_5d']].mean()
-        # 智慧命名邏輯：
-        # 波動率最高、風險最大的狀態 = Crash (崩盤市)
-        crash_regime = stats['volatility_5d'].idxmax()
-        # 報酬率最高的狀態 = Bull (牛市)
-        bull_regime = stats['log_return'].idxmax()
+        # 智慧命名邏輯：Crash 不只看波動，也懲罰正報酬，避免高波動上漲期被誤命名。
+        vol_span = stats['volatility_5d'].max() - stats['volatility_5d'].min()
+        ret_span = stats['log_return'].max() - stats['log_return'].min()
+        vol_score = (stats['volatility_5d'] - stats['volatility_5d'].min()) / (vol_span if vol_span else 1)
+        ret_score = (stats['log_return'] - stats['log_return'].min()) / (ret_span if ret_span else 1)
+        risk_score = vol_score - ret_score
+        crash_regime = risk_score.idxmax()
+        # 報酬率最高的狀態 = Bull (牛市)，但不可與 Crash 重疊
+        bull_candidates = stats.drop(index=crash_regime)
+        bull_regime = bull_candidates['log_return'].idxmax()
         # 剩下的就是 Sideways (震盪市)
         sideways_regime = [r for r in range(self.n_components) if r not in [crash_regime, bull_regime]][0]
         # 建立狀態映射表
