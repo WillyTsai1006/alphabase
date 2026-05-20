@@ -70,4 +70,5 @@ def test_meta_threshold_allows_high_confidence_signals(monkeypatch):
     backtester.generate_signals()
     backtester.run_backtest(max_positions=1)
 
-    assert "AAPL" in backtester.positions
+    assert backtester.trades_df.iloc[0]["symbol"] == "AAPL"
+    assert backtester.trades_df.iloc[0]["reason"] == "Take Profit"
