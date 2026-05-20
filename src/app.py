@@ -9,7 +9,7 @@ st.set_page_config(page_title="AlphaBase Quant V3.0", page_icon="📈", layout="
 from config import MODEL_PATHS, BACKTEST_PARAMS
 from utils import get_logger, db_manager
 from quant_engine import DataAndLabelEngine
-from meta_engine import load_meta_model
+from meta_engine import load_meta_artifact
 from backtester import InstitutionalBacktester
 logger = get_logger("StreamlitApp")
 
@@ -31,15 +31,15 @@ def load_models_and_data(selected_symbols):
     df = df.dropna().reset_index()
     # [V3.0 升級] 載入三重大腦：主模型、次模型、HMM 總經模型
     lgbm_model = joblib.load(MODEL_PATHS['lgbm'])
-    meta_model, meta_threshold = load_meta_model(MODEL_PATHS['meta'])
+    meta_artifact = load_meta_artifact(MODEL_PATHS['meta'])
     hmm_data = joblib.load(MODEL_PATHS['hmm'])
-    return df, lgbm_model, meta_model, hmm_data, meta_threshold
+    return df, lgbm_model, meta_artifact, hmm_data
 
 @st.cache_data(show_spinner=False)
 def run_backtest_cached(selected_symbols, threshold, sl_mult, tp_mult):
-    df, lgbm_model, meta_model, hmm_data, meta_threshold = load_models_and_data(tuple(selected_symbols))
+    df, lgbm_model, meta_artifact, hmm_data = load_models_and_data(tuple(selected_symbols))
     # [V3.0 升級] 傳入 meta_model
-    bt = InstitutionalBacktester(df, lgbm_model, meta_model, hmm_data, meta_threshold=meta_threshold)
+    bt = InstitutionalBacktester(df, lgbm_model, meta_artifact, hmm_data)
     bt.params['threshold'] = threshold
     bt.params['sl_mult'] = sl_mult
     bt.params['tp_mult'] = tp_mult
@@ -59,7 +59,7 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ 模型微調")
 threshold_val = st.sidebar.slider("主模型初篩門檻", 0.50, 0.70, BACKTEST_PARAMS['threshold'], 0.01)
 st.sidebar.markdown("---")
-st.sidebar.success("✅ **Meta-Labeling 次模型**: 啟動中\n\n✅ **HMM 崩盤防禦**: 啟動中\n\n✅ **半凱利公式 (Half-Kelly)**: 啟動中")
+st.sidebar.success("✅ **Meta-Labeling 次模型**: 啟動中\n\n✅ **HMM 崩盤防禦**: 啟動中\n\n✅ **Kelly 倉位**: 需通過校準報告才啟用")
 st.title("AlphaBase 量化戰情室 V3.0 📊")
 st.markdown("全球頂級對沖基金架構：**主模型找機會 ➜ Meta 模型算勝率 ➜ 凱利公式定注碼 ➜ HMM 避股災**")
 if not selected_symbols: st.stop()

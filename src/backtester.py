@@ -12,16 +12,20 @@ logger = get_logger("Backtester_V3")
 
 class InstitutionalBacktester:
     """整合 HMM 風控、LightGBM 雙重校準 (Meta-Labeling) 與正宗凱利公式的終極回測引擎"""
-    def __init__(self, data_df, primary_model, meta_model, hmm_model_data, meta_threshold=None):
+    def __init__(self, data_df, primary_model, meta_model, hmm_model_data, meta_threshold=None, kelly_sizing_approved=None):
         self.data = data_df.copy()
         self.primary_model = primary_model
         if isinstance(meta_model, dict) and 'model' in meta_model:
             meta_threshold = meta_model.get('threshold', meta_threshold)
+            kelly_sizing_approved = meta_model.get('kelly_sizing_approved', kelly_sizing_approved)
             meta_model = meta_model['model']
         self.meta_model = meta_model
         self.features = FEATURES
         self.params = BACKTEST_PARAMS.copy()
         self.meta_threshold = BACKTEST_PARAMS['meta_threshold'] if meta_threshold is None else meta_threshold
+        if kelly_sizing_approved is None:
+            kelly_sizing_approved = not self.params.get('kelly_requires_calibration', True)
+        self.kelly_sizing_approved = bool(kelly_sizing_approved)
         # HMM 總經模型設定
         self.hmm_model = hmm_model_data['model']
         self.hmm_map = hmm_model_data['map']
@@ -79,16 +83,15 @@ class InstitutionalBacktester:
                     if sym in self.positions or sym not in current_syms: continue
                     exec_price = daily_data.loc[sym]['open'] * (1 + self.params['slippage'])
                     curr_equity = self.cash + sum([self.positions[s] * daily_data.loc[s]['close'] for s in self.positions if s in current_syms])
-                    # 正宗凱利公式 (Kelly Criterion)
-                    # f* = p - (1-p)/b 
-                    # p = Meta-Model 算出的精準勝率, b = 賠率 (約 2.0)
-                    p = sig['meta_prob']
-                    kelly_f = p - (1 - p) / b
-                    # 安全機制：使用半凱利 (Half-Kelly) 降低波動，並設定部位上限 30%，小於 0% 則過濾不買
-                    kelly_fraction = max(0, min(kelly_f * 0.5, 0.30))
-                    # 只有凱利算出來大於 5% 資金的才值得買 (過濾雜訊)
-                    if kelly_fraction > 0.05:
-                        shares = int(min(curr_equity * kelly_fraction, self.cash) / (exec_price * (1 + self.params['tc'])))
+                    if self.kelly_sizing_approved:
+                        # Kelly sizing is only used after calibration passes the research limits.
+                        p = sig['meta_prob']
+                        kelly_f = p - (1 - p) / b
+                        position_fraction = max(0, min(kelly_f * 0.5, 0.30))
+                    else:
+                        position_fraction = self.params['fallback_position_fraction']
+                    if position_fraction > 0.05:
+                        shares = int(min(curr_equity * position_fraction, self.cash) / (exec_price * (1 + self.params['tc'])))
                         if shares > 0:
                             self.cash -= shares * exec_price * (1 + self.params['tc'])
                             self.positions[sym], self.entry_prices[sym], self.days_held[sym] = shares, exec_price, 0
@@ -134,10 +137,10 @@ if __name__ == "__main__":
     df['volatility'] = df.groupby(level='symbol')['close'].pct_change().ewm(span=100).std()
     df = df.dropna().reset_index()
     lgbm_model = joblib.load(MODEL_PATHS['lgbm'])
-    from meta_engine import load_meta_model
-    meta_model, meta_threshold = load_meta_model(MODEL_PATHS['meta'])
+    from meta_engine import load_meta_artifact
+    meta_artifact = load_meta_artifact(MODEL_PATHS['meta'])
     hmm_data = joblib.load(MODEL_PATHS['hmm'])
-    bt = InstitutionalBacktester(df, lgbm_model, meta_model, hmm_data, meta_threshold=meta_threshold)
+    bt = InstitutionalBacktester(df, lgbm_model, meta_artifact, hmm_data)
     bt.generate_signals()
     bt.run_backtest()
     logger.info(f"✅ V3.0 回測完成！最終總資產: ${bt.equity_df['equity'].iloc[-1]:,.2f}")

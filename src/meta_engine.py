@@ -4,29 +4,48 @@ import lightgbm as lgb
 from sklearn.metrics import precision_score
 import joblib
 import warnings
+from pathlib import Path
 # 導入共用配置與工具
-from config import TARGET_SYMBOLS, FEATURES, MODEL_PATHS, BACKTEST_PARAMS
+from config import TARGET_SYMBOLS, FEATURES, MODEL_PATHS, BACKTEST_PARAMS, RESEARCH_CONFIG
 from utils import get_logger
 from quant_engine import DataAndLabelEngine
+from research import compute_calibration_report, is_kelly_sizing_approved
 warnings.filterwarnings('ignore')
 logger = get_logger("MetaEngine")
 
-def save_meta_model(model, threshold, path=MODEL_PATHS['meta']):
+def save_meta_model(model, threshold, path=MODEL_PATHS['meta'], calibration_report=None, kelly_sizing_approved=False):
     """保存 Meta 模型與最佳過濾門檻，避免訓練結果只留在 log。"""
     artifact = {
         'model': model,
         'threshold': float(threshold),
         'features': FEATURES + ['primary_prob'],
         'base_threshold': BACKTEST_PARAMS['threshold'],
+        'calibration_report': calibration_report,
+        'kelly_sizing_approved': bool(kelly_sizing_approved),
     }
     joblib.dump(artifact, path)
+    if path == MODEL_PATHS['meta']:
+        research_path = RESEARCH_CONFIG['artifact_paths']['meta_model']
+        Path(research_path).parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(artifact, research_path)
+
+def load_meta_artifact(path=MODEL_PATHS['meta']):
+    artifact = joblib.load(path)
+    if isinstance(artifact, dict) and 'model' in artifact:
+        return artifact
+    return {
+        'model': artifact,
+        'threshold': BACKTEST_PARAMS['meta_threshold'],
+        'features': FEATURES + ['primary_prob'],
+        'base_threshold': BACKTEST_PARAMS['threshold'],
+        'calibration_report': None,
+        'kelly_sizing_approved': False,
+    }
 
 def load_meta_model(path=MODEL_PATHS['meta']):
     """載入新版 artifact；舊版純模型 pkl 會使用預設門檻。"""
-    artifact = joblib.load(path)
-    if isinstance(artifact, dict) and 'model' in artifact:
-        return artifact['model'], artifact.get('threshold', BACKTEST_PARAMS['meta_threshold'])
-    return artifact, BACKTEST_PARAMS['meta_threshold']
+    artifact = load_meta_artifact(path)
+    return artifact['model'], artifact.get('threshold', BACKTEST_PARAMS['meta_threshold'])
 
 class MetaLabelingEngine:
     """元標註 (Meta-Labeling) 訓練引擎"""
@@ -86,6 +105,11 @@ class MetaLabelingEngine:
         meta_lgbm = lgb.train(params, lgb.Dataset(X_train, label=y_train), num_boost_round=100)
         # 自動尋找最佳過濾門檻 (不再寫死 0.6)
         test_preds = meta_lgbm.predict(X_test)
+        calibration = compute_calibration_report(
+            y_test,
+            test_preds,
+        )
+        kelly_approved = is_kelly_sizing_approved(calibration)
         base_win_rate = y_test.mean()
         # 尋找能讓勝率提升的最大門檻
         best_threshold = 0.5
@@ -99,9 +123,15 @@ class MetaLabelingEngine:
                     best_threshold = thresh
         logger.info(f"✅ Meta-Model 訓練完成！(最佳過濾門檻: {best_threshold:.2f})")
         logger.info(f"🏆 【V3.1 雙重過濾成效】 OOS 測試勝率從原本的 {base_win_rate:.2%} 提升至 -> {best_win_rate:.2%} 🚀")
-        save_meta_model(meta_lgbm, best_threshold)
+        logger.info(
+            "📏 Calibration: "
+            f"Brier={calibration['brier_score']:.4f}, "
+            f"ECE={calibration['expected_calibration_error']:.4f}, "
+            f"Kelly sizing approved={kelly_approved}"
+        )
+        save_meta_model(meta_lgbm, best_threshold, calibration_report=calibration, kelly_sizing_approved=kelly_approved)
         logger.info("💾 Meta-Model 已保存。")
-        return meta_lgbm, best_threshold
+        return meta_lgbm, best_threshold, calibration
 
 if __name__ == "__main__":
     from config import TARGET_SYMBOLS

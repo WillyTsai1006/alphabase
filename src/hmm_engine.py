@@ -5,8 +5,9 @@ import warnings
 from hmmlearn.hmm import GaussianHMM
 from sqlalchemy import text
 # 導入 V2 共用配置與工具
-from config import BENCHMARK_SYMBOL, MODEL_PATHS
+from config import BENCHMARK_SYMBOL, MODEL_PATHS, RESEARCH_CONFIG
 from utils import get_logger, db_manager
+from pathlib import Path
 warnings.filterwarnings('ignore')
 logger = get_logger("HMMEngine")
 
@@ -67,6 +68,9 @@ class MarketRegimeModel:
         """保存模型與狀態映射表"""
         data = {'model': self.model, 'map': self.regime_map}
         joblib.dump(data, MODEL_PATHS['hmm'])
+        research_path = RESEARCH_CONFIG['artifact_paths']['hmm_model']
+        Path(research_path).parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(data, research_path)
         logger.info(f"💾 HMM 模型已保存至 {MODEL_PATHS['hmm']}")
 
 if __name__ == "__main__":
