@@ -163,18 +163,29 @@ class MetaLabelingEngine:
         )
         kelly_approved = is_kelly_sizing_approved(calibration)
         base_win_rate = y_tune.mean()
-        # 尋找能讓勝率提升的最大門檻
-        best_threshold = 0.5
-        best_win_rate = base_win_rate
-        for thresh in np.arange(0.5, 0.8, 0.05):
-            filtered_preds = val_preds > thresh
-            if filtered_preds.sum() > 10: # 確保至少保留 10 筆交易
+        # 校準後的成功機率可能低於 0.5；以分位數搜尋可交易門檻，而不是寫死 0.5+。
+        min_events = max(20, int(len(val_preds) * 0.10))
+        candidate_thresholds = np.unique(np.quantile(val_preds, np.linspace(0.0, 0.90, 19)))
+        best_threshold = float(candidate_thresholds[0])
+        best_win_rate = -1.0
+        best_event_count = 0
+        for thresh in candidate_thresholds:
+            filtered_preds = val_preds >= thresh
+            event_count = int(filtered_preds.sum())
+            if event_count >= min_events:
                 filtered_win_rate = precision_score(y_tune, filtered_preds, zero_division=0)
-                if filtered_win_rate > best_win_rate:
+                if (
+                    filtered_win_rate > best_win_rate
+                    or (filtered_win_rate == best_win_rate and event_count > best_event_count)
+                ):
                     best_win_rate = filtered_win_rate
-                    best_threshold = thresh
+                    best_threshold = float(thresh)
+                    best_event_count = event_count
+        if best_win_rate < 0:
+            best_win_rate = base_win_rate
+            best_event_count = len(val_preds)
         logger.info(f"✅ Meta-Model 訓練完成！(最佳過濾門檻: {best_threshold:.2f})")
-        logger.info(f"🏆 【V3.1 雙重過濾成效】 OOS 測試勝率從原本的 {base_win_rate:.2%} 提升至 -> {best_win_rate:.2%} 🚀")
+        logger.info(f"🏆 【V3.1 雙重過濾成效】 OOS 調校勝率從原本的 {base_win_rate:.2%} 提升至 -> {best_win_rate:.2%}，保留 {best_event_count} 筆事件 🚀")
         logger.info(
             "📏 Calibration: "
             f"Brier={calibration['brier_score']:.4f}, "

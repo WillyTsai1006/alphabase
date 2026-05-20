@@ -73,6 +73,6 @@ def test_train_meta_model_separates_threshold_and_calibration(monkeypatch):
 
     _, threshold, calibration = engine.train_meta_model(events)
 
-    assert threshold >= 0.5
+    assert 0 <= threshold <= 1
     assert calibration["sample_count"] > 0
     assert saved["calibration_report"] == calibration

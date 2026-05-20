@@ -1,6 +1,6 @@
 # AlphaBase V3 Reproducible Research Report
 
-Generated: 2026-05-20 14:41:09 UTC
+Generated: 2026-05-20 14:55:49 UTC
 
 ## Research identity
 
@@ -30,15 +30,15 @@ Fixed universe:
 ```json
 {
   "fallback_position_fraction": 0.1,
-  "horizon_days": 5,
+  "horizon_days": 15,
   "initial_capital": 100000,
   "kelly_requires_calibration": true,
   "meta_threshold": 0.5,
-  "sl_mult": 2.0,
+  "sl_mult": 1.0,
   "slippage": 0.001,
   "tc": 0.001,
   "threshold": 0.55,
-  "tp_mult": 4.0
+  "tp_mult": 2.0
 }
 ```
 
@@ -46,7 +46,7 @@ Fixed universe:
 
 ```json
 {
-  "embargo_days": 5,
+  "embargo_days": 15,
   "step_months": 6,
   "test_months": 6,
   "train_years": 3
@@ -61,11 +61,11 @@ test window. Single split OOS results are not treated as sufficient evidence.
 
 | Artifact | Path | Status | SHA256 |
 | --- | --- | --- | --- |
-| primary_model | `artifacts/research/alphabase_v3_research_2026_05/primary_lgbm.pkl` | present | `46bb95446d47639eb581eeb4851c8bc423fdc993cedd6cb0745df159917f77b5` |
-| meta_model | `artifacts/research/alphabase_v3_research_2026_05/meta_lgbm.pkl` | present | `f9a42d04364a04fb78b889b2561d251dfff702ef3541b1d3d7b1fcc0182dfd53` |
+| primary_model | `artifacts/research/alphabase_v3_research_2026_05/primary_lgbm.pkl` | present | `d3614af0947b04728c037a6f0029c19ca38fe0a3a66372f9961d39c639c20d12` |
+| meta_model | `artifacts/research/alphabase_v3_research_2026_05/meta_lgbm.pkl` | present | `ca856ad6a5137df34bf77fd31557b2aaec2712647392a23bb8127223823e71f4` |
 | hmm_model | `artifacts/research/alphabase_v3_research_2026_05/hmm_model.pkl` | present | `bd0563634319e23550ddc00b93e1c4a4734b9c9da398fdf056015368c6fdf78d` |
-| primary_walk_forward_metrics | `artifacts/research/alphabase_v3_research_2026_05/primary_walk_forward_metrics.csv` | present | `8f962edf2b5fa752bb7f7d1fc80a3e184e04cf97c6eef339d7aacee07f195fe7` |
-| primary_walk_forward_predictions | `artifacts/research/alphabase_v3_research_2026_05/primary_walk_forward_predictions.csv` | present | `f5326afc217747c26ce5aff3836fffccfa46796d956f15a2423f9dc7a7757df1` |
+| primary_walk_forward_metrics | `artifacts/research/alphabase_v3_research_2026_05/primary_walk_forward_metrics.csv` | present | `8a89594a96dddf57a8f0301a6581f64dc321ee8c01198f07da0ebb1b762ae637` |
+| primary_walk_forward_predictions | `artifacts/research/alphabase_v3_research_2026_05/primary_walk_forward_predictions.csv` | present | `e236b1c3729ef6aba7f48637c6de16366463f7d6317bb15a47895f00a781c9d8` |
 
 ## Calibration and Kelly sizing decision
 
@@ -74,9 +74,9 @@ Walk-forward metrics summary:
 ```json
 {
   "fold_count": 12,
-  "max_auc": 0.7532090132090132,
-  "mean_auc": 0.5988808897408778,
-  "min_auc": 0.4376029492509216
+  "max_auc": 0.5615405999261232,
+  "mean_auc": 0.5158297856981718,
+  "min_auc": 0.4720880173466381
 }
 ```
 
@@ -101,11 +101,11 @@ Saved calibration report:
       "mean_prob": null
     },
     {
-      "abs_error": 0.019597045256953494,
+      "abs_error": null,
       "bin": 1,
-      "count": 285,
-      "empirical_rate": 0.13333333333333333,
-      "mean_prob": 0.15293037859028683
+      "count": 0,
+      "empirical_rate": null,
+      "mean_prob": null
     },
     {
       "abs_error": null,
@@ -115,11 +115,11 @@ Saved calibration report:
       "mean_prob": null
     },
     {
-      "abs_error": null,
+      "abs_error": 0.020019392362268684,
       "bin": 3,
-      "count": 0,
-      "empirical_rate": null,
-      "mean_prob": null
+      "count": 937,
+      "empirical_rate": 0.3799359658484525,
+      "mean_prob": 0.35991657348618383
     },
     {
       "abs_error": null,
@@ -164,14 +164,14 @@ Saved calibration report:
       "mean_prob": null
     }
   ],
-  "brier_score": 0.11715921592003779,
-  "expected_calibration_error": 0.019597045256953494,
-  "max_calibration_error": 0.019597045256953494,
-  "sample_count": 285
+  "brier_score": 0.23604267783084368,
+  "expected_calibration_error": 0.020019392362268684,
+  "max_calibration_error": 0.020019392362268684,
+  "sample_count": 937
 }
 ```
 
-Decision: Approved by saved Meta artifact calibration report.
+Decision: Not approved in this report. Kelly sizing requires a saved Meta artifact with calibration metrics inside the configured limits.
 
 ## Backtest result status
 

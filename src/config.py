@@ -25,9 +25,9 @@ BACKTEST_PARAMS = {
     'initial_capital': 100000,
     'tc': 0.001,           # 0.1% 手續費
     'slippage': 0.001,     # 0.1% 滑價
-    'sl_mult': 2.0,        # 止損倍數
-    'tp_mult': 4.0,        # 止盈倍數
-    'horizon_days': 5,     # 持倉天數
+    'sl_mult': 1.0,        # 止損倍數
+    'tp_mult': 2.0,        # 止盈倍數
+    'horizon_days': 15,    # 持倉天數
     'threshold': 0.55,     # 主模型買入信心門檻
     'meta_threshold': 0.50, # Meta 模型預設過濾門檻
     'kelly_requires_calibration': True,
