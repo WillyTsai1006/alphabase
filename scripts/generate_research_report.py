@@ -125,7 +125,7 @@ Decision: {kelly_status}
 
 ## Backtest result status
 
-{"Missing artifacts: " + ", ".join(missing) + "." if missing else "All fixed artifacts are present. Run the full pipeline and attach fold-level metrics before publishing performance numbers."}
+{"Missing artifacts: " + ", ".join(missing) + "." if missing else "All fixed artifacts are present in this environment. Review fold-level metrics and calibration evidence before publishing performance numbers."}
 
 No return, win-rate, or drawdown claim should be published unless this report is
 generated from the fixed artifact set above and includes walk-forward fold

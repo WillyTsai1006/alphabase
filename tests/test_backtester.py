@@ -126,6 +126,29 @@ def test_backtester_uses_oos_primary_predictions(monkeypatch):
     assert (backtester.data["primary_prob"] == 0.8).all()
 
 
+def test_backtester_limits_data_to_oos_prediction_coverage(monkeypatch):
+    data = make_data()
+    predictions = data[["time", "symbol"]].iloc[[1]].copy()
+    predictions["primary_prob"] = 0.8
+    hmm_data = {"model": CrashFreeHMM(), "map": {0: "Bull", 1: "Crash"}}
+    backtester = InstitutionalBacktester(
+        data,
+        ConstantModel(0.0),
+        ConstantModel(0.8),
+        hmm_data,
+        meta_threshold=0.7,
+        primary_predictions=predictions,
+        require_oos_predictions=True,
+    )
+    spy = pd.DataFrame({"regime": [0, 0]}, index=data["time"])
+    monkeypatch.setattr(backtester, "load_spy_data", lambda: spy)
+
+    backtester.generate_signals()
+
+    assert len(backtester.data) == 1
+    assert backtester.data.iloc[0]["time"] == data.iloc[1]["time"]
+
+
 def test_hmm_crash_filter_only_applies_after_oos_start(monkeypatch):
     data = make_data()
     hmm_data = {"model": CrashHMM(), "map": {0: "Bull", 1: "Crash"}, "oos_start": "2025-01-01"}

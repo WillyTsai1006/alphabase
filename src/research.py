@@ -21,7 +21,8 @@ def clean_market_data(df, config=RESEARCH_CONFIG):
         if isinstance(cleaned.index, pd.MultiIndex) and "time" in cleaned.index.names
         else cleaned["time"]
     )
-    mask = pd.to_datetime(time_values).between(config["data_start"], config["data_end"])
+    time_index = pd.to_datetime(time_values)
+    mask = (time_index >= pd.Timestamp(config["data_start"])) & (time_index <= pd.Timestamp(config["data_end"]))
     cleaned = cleaned.loc[mask].copy()
 
     required = ["open", "high", "low", "close"]

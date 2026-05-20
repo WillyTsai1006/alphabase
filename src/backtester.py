@@ -64,15 +64,18 @@ class InstitutionalBacktester:
         missing = required - set(pred_df.columns)
         if missing:
             raise ValueError(f"OOS primary predictions 缺少欄位: {sorted(missing)}")
+        original_rows = len(self.data)
         self.data = self.data.drop(columns=['primary_prob'], errors='ignore').merge(
             pred_df[['time', 'symbol', 'primary_prob']],
             on=['time', 'symbol'],
-            how='left',
+            how='inner',
             validate='many_to_one',
         )
-        if self.data['primary_prob'].isna().any():
-            missing_rows = int(self.data['primary_prob'].isna().sum())
-            raise ValueError(f"OOS primary predictions 未覆蓋 {missing_rows} 筆回測資料")
+        if self.data.empty:
+            raise ValueError("OOS primary predictions 與回測資料沒有交集")
+        dropped_rows = original_rows - len(self.data)
+        if dropped_rows > 0:
+            logger.warning(f"OOS primary predictions 未覆蓋 {dropped_rows} 筆資料，已限制回測到 OOS 覆蓋期間。")
 
     def _payoff_ratio(self, volatility):
         reward = volatility * self.params['tp_mult'] - (self.params['tc'] + self.params['slippage'])
@@ -194,9 +197,18 @@ if __name__ == "__main__":
     df = df.dropna().reset_index()
     lgbm_model = joblib.load(MODEL_PATHS['lgbm'])
     from meta_engine import load_meta_artifact
+    from research import load_primary_oos_predictions
     meta_artifact = load_meta_artifact(MODEL_PATHS['meta'])
     hmm_data = joblib.load(MODEL_PATHS['hmm'])
-    bt = InstitutionalBacktester(df, lgbm_model, meta_artifact, hmm_data)
+    primary_predictions = load_primary_oos_predictions()
+    bt = InstitutionalBacktester(
+        df,
+        lgbm_model,
+        meta_artifact,
+        hmm_data,
+        primary_predictions=primary_predictions,
+        require_oos_predictions=True,
+    )
     bt.generate_signals()
     bt.run_backtest()
     logger.info(f"✅ V3.0 回測完成！最終總資產: ${bt.equity_df['equity'].iloc[-1]:,.2f}")

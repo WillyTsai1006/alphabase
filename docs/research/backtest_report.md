@@ -1,6 +1,6 @@
 # AlphaBase V3 Reproducible Research Report
 
-Generated: 2026-05-20 14:12:33 UTC
+Generated: 2026-05-20 14:30:51 UTC
 
 ## Research identity
 
@@ -61,11 +61,11 @@ test window. Single split OOS results are not treated as sufficient evidence.
 
 | Artifact | Path | Status | SHA256 |
 | --- | --- | --- | --- |
-| primary_model | `artifacts/research/alphabase_v3_research_2026_05/primary_lgbm.pkl` | missing | `N/A` |
-| meta_model | `artifacts/research/alphabase_v3_research_2026_05/meta_lgbm.pkl` | missing | `N/A` |
-| hmm_model | `artifacts/research/alphabase_v3_research_2026_05/hmm_model.pkl` | missing | `N/A` |
-| primary_walk_forward_metrics | `artifacts/research/alphabase_v3_research_2026_05/primary_walk_forward_metrics.csv` | missing | `N/A` |
-| primary_walk_forward_predictions | `artifacts/research/alphabase_v3_research_2026_05/primary_walk_forward_predictions.csv` | missing | `N/A` |
+| primary_model | `artifacts/research/alphabase_v3_research_2026_05/primary_lgbm.pkl` | present | `46bb95446d47639eb581eeb4851c8bc423fdc993cedd6cb0745df159917f77b5` |
+| meta_model | `artifacts/research/alphabase_v3_research_2026_05/meta_lgbm.pkl` | present | `4b96063b526304aa86f85c65800167c1fd4a3ca91c96bc16ab4884db60626f0a` |
+| hmm_model | `artifacts/research/alphabase_v3_research_2026_05/hmm_model.pkl` | present | `5b074a49f763de1c6bdd5955d1d5184c27a0dbc26469b2d1a6066ba4505ea88a` |
+| primary_walk_forward_metrics | `artifacts/research/alphabase_v3_research_2026_05/primary_walk_forward_metrics.csv` | present | `8f962edf2b5fa752bb7f7d1fc80a3e184e04cf97c6eef339d7aacee07f195fe7` |
+| primary_walk_forward_predictions | `artifacts/research/alphabase_v3_research_2026_05/primary_walk_forward_predictions.csv` | present | `f5326afc217747c26ce5aff3836fffccfa46796d956f15a2423f9dc7a7757df1` |
 
 ## Calibration and Kelly sizing decision
 
@@ -73,7 +73,10 @@ Walk-forward metrics summary:
 
 ```json
 {
-  "status": "missing"
+  "fold_count": 12,
+  "max_auc": 0.7532090132090132,
+  "mean_auc": 0.5988808897408778,
+  "min_auc": 0.4376029492509216
 }
 ```
 
@@ -89,7 +92,82 @@ Saved calibration report:
 
 ```json
 {
-  "status": "missing"
+  "bins": [
+    {
+      "abs_error": 0.0649256015031899,
+      "bin": 0,
+      "count": 21,
+      "empirical_rate": 0.0,
+      "mean_prob": 0.0649256015031899
+    },
+    {
+      "abs_error": 0.13953447327603635,
+      "bin": 1,
+      "count": 16,
+      "empirical_rate": 0.0,
+      "mean_prob": 0.13953447327603635
+    },
+    {
+      "abs_error": 0.25486148770233114,
+      "bin": 2,
+      "count": 2,
+      "empirical_rate": 0.0,
+      "mean_prob": 0.25486148770233114
+    },
+    {
+      "abs_error": 0.3013552042458563,
+      "bin": 3,
+      "count": 1,
+      "empirical_rate": 0.0,
+      "mean_prob": 0.3013552042458563
+    },
+    {
+      "abs_error": null,
+      "bin": 4,
+      "count": 0,
+      "empirical_rate": null,
+      "mean_prob": null
+    },
+    {
+      "abs_error": null,
+      "bin": 5,
+      "count": 0,
+      "empirical_rate": null,
+      "mean_prob": null
+    },
+    {
+      "abs_error": null,
+      "bin": 6,
+      "count": 0,
+      "empirical_rate": null,
+      "mean_prob": null
+    },
+    {
+      "abs_error": null,
+      "bin": 7,
+      "count": 0,
+      "empirical_rate": null,
+      "mean_prob": null
+    },
+    {
+      "abs_error": null,
+      "bin": 8,
+      "count": 0,
+      "empirical_rate": null,
+      "mean_prob": null
+    },
+    {
+      "abs_error": null,
+      "bin": 9,
+      "count": 0,
+      "empirical_rate": null,
+      "mean_prob": null
+    }
+  ],
+  "brier_score": 0.015987798531125485,
+  "expected_calibration_error": 0.1101766845908522,
+  "max_calibration_error": 0.3013552042458563,
+  "sample_count": 40
 }
 ```
 
@@ -97,7 +175,7 @@ Decision: Not approved in this report. Kelly sizing requires a saved Meta artifa
 
 ## Backtest result status
 
-Missing artifacts: primary_model, meta_model, hmm_model, primary_walk_forward_metrics, primary_walk_forward_predictions.
+All fixed artifacts are present in this environment. Review fold-level metrics and calibration evidence before publishing performance numbers.
 
 No return, win-rate, or drawdown claim should be published unless this report is
 generated from the fixed artifact set above and includes walk-forward fold

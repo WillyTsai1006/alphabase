@@ -23,6 +23,31 @@ def test_clean_market_data_applies_research_contract():
     assert cleaned.iloc[0]["time"] == "2017-01-03"
 
 
+def test_clean_market_data_handles_multiindex():
+    index = pd.MultiIndex.from_tuples(
+        [
+            (pd.Timestamp("2017-01-03"), "AAPL"),
+            (pd.Timestamp("2030-01-03"), "AAPL"),
+        ],
+        names=["time", "symbol"],
+    )
+    df = pd.DataFrame(
+        {
+            "open": [10, 10],
+            "high": [11, 11],
+            "low": [9, 9],
+            "close": [10, 10],
+            "volume": [100, 100],
+        },
+        index=index,
+    )
+
+    cleaned = clean_market_data(df)
+
+    assert len(cleaned) == 1
+    assert cleaned.index[0] == (pd.Timestamp("2017-01-03"), "AAPL")
+
+
 def test_walk_forward_splits_are_rolling_and_embargoed():
     dates = pd.date_range("2016-01-01", "2025-12-31", freq="B")
 

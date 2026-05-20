@@ -26,10 +26,11 @@ def make_meta_frame(periods=260):
     return df
 
 
-def test_generate_meta_labels_requires_oos_predictions():
+def test_generate_meta_labels_requires_oos_predictions(monkeypatch):
     engine = MetaLabelingEngine.__new__(MetaLabelingEngine)
     engine.primary_model = ConstantPrimary()
     engine.base_threshold = 0.55
+    monkeypatch.setattr(meta_engine, "load_primary_oos_predictions", lambda: (_ for _ in ()).throw(FileNotFoundError()))
 
     try:
         engine.generate_meta_labels(make_meta_frame(), primary_predictions=None, require_oos_predictions=True)
