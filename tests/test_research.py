@@ -46,3 +46,17 @@ def test_bad_calibration_rejects_kelly_sizing():
     report = compute_calibration_report([0, 0, 1, 1], [0.95, 0.90, 0.10, 0.05], n_bins=2)
 
     assert is_kelly_sizing_approved(report) is False
+
+
+def test_primary_oos_prediction_loader_requires_columns(tmp_path):
+    from research import load_primary_oos_predictions
+
+    path = tmp_path / "predictions.csv"
+    pd.DataFrame({"time": ["2024-01-02"], "symbol": ["AAPL"]}).to_csv(path, index=False)
+
+    try:
+        load_primary_oos_predictions("predictions.csv", root=tmp_path)
+    except ValueError as exc:
+        assert "primary_prob" in str(exc)
+    else:
+        raise AssertionError("Expected missing primary_prob to fail")

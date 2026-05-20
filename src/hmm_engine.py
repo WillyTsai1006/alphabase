@@ -66,7 +66,12 @@ class MarketRegimeModel:
 
     def save_model(self):
         """保存模型與狀態映射表"""
-        data = {'model': self.model, 'map': self.regime_map}
+        data = {
+            'model': self.model,
+            'map': self.regime_map,
+            'train_end': RESEARCH_CONFIG['hmm_train_end'],
+            'oos_start': RESEARCH_CONFIG['hmm_oos_start'],
+        }
         joblib.dump(data, MODEL_PATHS['hmm'])
         research_path = RESEARCH_CONFIG['artifact_paths']['hmm_model']
         Path(research_path).parent.mkdir(parents=True, exist_ok=True)
@@ -78,7 +83,7 @@ if __name__ == "__main__":
     spy_df = hmm.fetch_spy_data()
     # 為了防止「未來函數」，我們只用 2023 年以前的歷史數據來訓練大盤規律
     # 這樣回測 2023-2025 年時，HMM 才是用「未知的眼光」在看盤
-    train_df = spy_df[spy_df.index < '2023-01-01']
+    train_df = spy_df[spy_df.index <= RESEARCH_CONFIG['hmm_train_end']]
     if len(train_df) > 100:
         hmm.train_and_identify(train_df)
         hmm.save_model()

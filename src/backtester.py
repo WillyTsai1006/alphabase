@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 import warnings
 import joblib
-from datetime import timedelta
 from sqlalchemy import text
 # 導入共用配置與工具
 from config import BACKTEST_PARAMS, BENCHMARK_SYMBOL, MODEL_PATHS, FEATURES
@@ -12,9 +11,21 @@ logger = get_logger("Backtester_V3")
 
 class InstitutionalBacktester:
     """整合 HMM 風控、LightGBM 雙重校準 (Meta-Labeling) 與正宗凱利公式的終極回測引擎"""
-    def __init__(self, data_df, primary_model, meta_model, hmm_model_data, meta_threshold=None, kelly_sizing_approved=None):
+    def __init__(
+        self,
+        data_df,
+        primary_model,
+        meta_model,
+        hmm_model_data,
+        meta_threshold=None,
+        kelly_sizing_approved=None,
+        primary_predictions=None,
+        require_oos_predictions=False,
+    ):
         self.data = data_df.copy()
         self.primary_model = primary_model
+        self.primary_predictions = primary_predictions
+        self.require_oos_predictions = require_oos_predictions
         if isinstance(meta_model, dict) and 'model' in meta_model:
             meta_threshold = meta_model.get('threshold', meta_threshold)
             kelly_sizing_approved = meta_model.get('kelly_sizing_approved', kelly_sizing_approved)
@@ -30,11 +41,43 @@ class InstitutionalBacktester:
         self.hmm_model = hmm_model_data['model']
         self.hmm_map = hmm_model_data['map']
         self.crash_regime = [k for k, v in self.hmm_map.items() if 'Crash' in v][0]
+        self.hmm_oos_start = pd.to_datetime(hmm_model_data.get('oos_start')) if hmm_model_data.get('oos_start') else None
         # 狀態追蹤
         self.cash = self.params['initial_capital']
         self.positions, self.entry_prices = {}, {}
         self.stop_losses, self.take_profits, self.days_held = {}, {}, {}
         self.trade_log, self.equity_curve = [], []
+
+    def _feature_matrix(self, columns):
+        X = self.data[columns]
+        if X.isna().any().any():
+            missing = X.columns[X.isna().any()].tolist()
+            raise ValueError(f"缺少模型特徵，請先清理資料: {missing}")
+        return X
+
+    def _merge_primary_predictions(self, predictions):
+        pred_df = predictions.copy()
+        if isinstance(pred_df.index, pd.MultiIndex):
+            pred_df = pred_df.reset_index()
+        pred_df['time'] = pd.to_datetime(pred_df['time'])
+        required = {'time', 'symbol', 'primary_prob'}
+        missing = required - set(pred_df.columns)
+        if missing:
+            raise ValueError(f"OOS primary predictions 缺少欄位: {sorted(missing)}")
+        self.data = self.data.drop(columns=['primary_prob'], errors='ignore').merge(
+            pred_df[['time', 'symbol', 'primary_prob']],
+            on=['time', 'symbol'],
+            how='left',
+            validate='many_to_one',
+        )
+        if self.data['primary_prob'].isna().any():
+            missing_rows = int(self.data['primary_prob'].isna().sum())
+            raise ValueError(f"OOS primary predictions 未覆蓋 {missing_rows} 筆回測資料")
+
+    def _payoff_ratio(self, volatility):
+        reward = volatility * self.params['tp_mult'] - (self.params['tc'] + self.params['slippage'])
+        risk = volatility * self.params['sl_mult'] + (self.params['tc'] + self.params['slippage'])
+        return reward / risk if risk > 0 else 0
 
     def load_spy_data(self):
         """讀取 SPY 並計算每日的 HMM 狀態"""
@@ -52,12 +95,20 @@ class InstitutionalBacktester:
         return spy
 
     def generate_signals(self):
-        logger.info("🤖 [階段一] 主模型掃描全歷史訊號...")
-        self.data['primary_prob'] = self.primary_model.predict(self.data[self.features].fillna(0))
+        if self.primary_predictions is not None:
+            logger.info("🤖 [階段一] 使用 walk-forward OOS primary predictions...")
+            self._merge_primary_predictions(self.primary_predictions)
+        elif 'primary_prob' in self.data.columns:
+            logger.info("🤖 [階段一] 使用資料中已存在的 primary_prob...")
+        elif self.require_oos_predictions:
+            raise ValueError("研究模式需要 walk-forward OOS primary predictions，拒絕全樣本 predict。")
+        else:
+            logger.info("🤖 [階段一] 主模型掃描全歷史訊號...")
+            self.data['primary_prob'] = self.primary_model.predict(self._feature_matrix(self.features))
         logger.info("🧠 [階段二] 第二大腦 (Meta-Model) 進行勝率校準...")
         # 準備 Meta-Model 需要的特徵：原本的特徵 + 主模型信心度
         meta_features = self.features + ['primary_prob']
-        self.data['meta_prob'] = self.meta_model.predict(self.data[meta_features].fillna(0))
+        self.data['meta_prob'] = self.meta_model.predict(self._feature_matrix(meta_features))
         return self.data
 
     def run_backtest(self, max_positions=3):
@@ -65,13 +116,14 @@ class InstitutionalBacktester:
         spy_df = self.load_spy_data()
         daily_groups = self.data.groupby('time')
         prev_signals = {}
-        # 計算賠率 b (Profit-to-Loss Ratio)，設定 tp=4, sl=2，賠率約為 2:1
-        b = self.params['tp_mult'] / self.params['sl_mult'] 
+        trading_days = sorted(daily_groups.groups.keys())
+        next_trading_day = {trading_days[i]: trading_days[i + 1] for i in range(len(trading_days) - 1)}
         for current_time, group in daily_groups:
             daily_data = group.set_index('symbol')
             current_syms = daily_data.index.tolist()
             today_spy = spy_df.loc[current_time] if current_time in spy_df.index else None
-            is_crash = (today_spy is not None and today_spy['regime'] == self.crash_regime)
+            hmm_is_oos = self.hmm_oos_start is None or pd.Timestamp(current_time) >= self.hmm_oos_start
+            is_crash = (hmm_is_oos and today_spy is not None and today_spy['regime'] == self.crash_regime)
             # 1. T+1 進場執行
             if current_time in prev_signals:
                 # Meta-Model 的信心度 (meta_prob) 來排序，找出勝率最高的標的
@@ -86,6 +138,9 @@ class InstitutionalBacktester:
                     if self.kelly_sizing_approved:
                         # Kelly sizing is only used after calibration passes the research limits.
                         p = sig['meta_prob']
+                        b = self._payoff_ratio(sig['volatility'])
+                        if b <= 0:
+                            continue
                         kelly_f = p - (1 - p) / b
                         position_fraction = max(0, min(kelly_f * 0.5, 0.30))
                     else:
@@ -122,8 +177,9 @@ class InstitutionalBacktester:
             # Meta-Model 篩選第二層：使用訓練時保存的最佳門檻
             if not primary_pass.empty:
                 meta_pass = primary_pass[primary_pass['meta_prob'] >= self.meta_threshold]
-                if not meta_pass.empty:
-                    prev_signals[current_time + timedelta(days=1)] = meta_pass
+                next_day = next_trading_day.get(current_time)
+                if not meta_pass.empty and next_day is not None:
+                    prev_signals[next_day] = meta_pass
             # 4. 記錄資產
             self.equity_curve.append({'time': current_time, 'equity': self.cash + sum([self.positions[s] * daily_data.loc[s]['close'] for s in self.positions if s in current_syms])})
         self.equity_df = pd.DataFrame(self.equity_curve).set_index('time')

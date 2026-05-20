@@ -7,6 +7,8 @@ from sklearn.metrics import brier_score_loss
 
 from config import RESEARCH_CONFIG
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
 
 def clean_market_data(df, config=RESEARCH_CONFIG):
     """Apply the research data-quality contract before features or labels."""
@@ -136,3 +138,35 @@ def sha256_file(path):
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def artifact_status(config=RESEARCH_CONFIG, root=PROJECT_ROOT):
+    rows = []
+    for name, path in config["artifact_paths"].items():
+        if name == "report":
+            continue
+        full_path = Path(root) / path
+        checksum = sha256_file(full_path)
+        rows.append(
+            {
+                "name": name,
+                "path": path,
+                "status": "present" if checksum else "missing",
+                "sha256": checksum or "N/A",
+            }
+        )
+    return rows
+
+
+def missing_required_artifacts(config=RESEARCH_CONFIG, root=PROJECT_ROOT):
+    return [row["name"] for row in artifact_status(config, root) if row["status"] != "present"]
+
+
+def load_primary_oos_predictions(path=None, root=PROJECT_ROOT):
+    path = Path(root) / (path or RESEARCH_CONFIG["artifact_paths"]["primary_walk_forward_predictions"])
+    predictions = pd.read_csv(path, parse_dates=["time"])
+    required = {"time", "symbol", "primary_prob"}
+    missing = required - set(predictions.columns)
+    if missing:
+        raise ValueError(f"Primary OOS predictions missing columns: {sorted(missing)}")
+    return predictions[["time", "symbol", "primary_prob"]].copy()

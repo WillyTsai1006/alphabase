@@ -9,7 +9,7 @@ from pathlib import Path
 from config import TARGET_SYMBOLS, FEATURES, MODEL_PATHS, BACKTEST_PARAMS, RESEARCH_CONFIG
 from utils import get_logger
 from quant_engine import DataAndLabelEngine
-from research import compute_calibration_report, is_kelly_sizing_approved
+from research import compute_calibration_report, is_kelly_sizing_approved, load_primary_oos_predictions
 warnings.filterwarnings('ignore')
 logger = get_logger("MetaEngine")
 
@@ -54,15 +54,35 @@ class MetaLabelingEngine:
         self.primary_model = joblib.load(MODEL_PATHS['lgbm'])
         self.base_threshold = BACKTEST_PARAMS['threshold'] # 預設買入信心門檻 (0.55)
 
-    def generate_meta_labels(self, df):
+    def generate_meta_labels(self, df, primary_predictions=None, require_oos_predictions=True):
         """
         核心邏輯：生成元標註 (Meta-Labels)
         - 1: 主模型預測買入，且真的賺錢 (True Positive)
         - 0: 主模型預測買入，但卻虧損 (False Positive)
         """
-        logger.info("🔍 正在讓主模型對歷史數據進行『模擬看盤』...")
-        # 1. 取得主模型的預測機率
-        df['primary_prob'] = self.primary_model.predict(df[FEATURES].fillna(0))
+        df = df.copy()
+        if primary_predictions is None and require_oos_predictions:
+            primary_predictions = load_primary_oos_predictions()
+        if primary_predictions is not None:
+            logger.info("🔍 使用 walk-forward OOS primary predictions 生成 Meta-Labels...")
+            pred_df = primary_predictions.copy()
+            if isinstance(pred_df.index, pd.MultiIndex):
+                pred_df = pred_df.reset_index()
+            pred_df['time'] = pd.to_datetime(pred_df['time'])
+            base_df = df.reset_index() if isinstance(df.index, pd.MultiIndex) else df
+            df = base_df.drop(columns=['primary_prob'], errors='ignore').merge(
+                pred_df[['time', 'symbol', 'primary_prob']],
+                on=['time', 'symbol'],
+                how='inner',
+                validate='one_to_one',
+            ).set_index(['time', 'symbol'])
+        elif require_oos_predictions:
+            raise ValueError("Meta-Labeling 需要 walk-forward OOS primary predictions。")
+        else:
+            logger.warning("⚠️ 使用樣本內 Primary predict 生成 Meta-Labels，僅供開發測試。")
+            if df[FEATURES].isna().any().any():
+                raise ValueError("Meta-Labeling 特徵含缺值，請先清理資料。")
+            df['primary_prob'] = self.primary_model.predict(df[FEATURES])
         # 2. 過濾出主模型「喊買」的樣本 (Events)
         events = df[df['primary_prob'] >= self.base_threshold].copy()
         logger.info(f"📊 主模型共發出 {len(events)} 次買入訊號。")
@@ -84,11 +104,21 @@ class MetaLabelingEngine:
         y = events['meta_target']
         split_date = X.index.get_level_values('time').max() - pd.Timedelta(days=180)
         tr_mask = X.index.get_level_values('time') < split_date
-        ts_mask = X.index.get_level_values('time') >= split_date
+        eval_mask = X.index.get_level_values('time') >= split_date
         X_train, y_train = X[tr_mask], y[tr_mask]
-        X_test, y_test = X[ts_mask], y[ts_mask]
-        if X_train.empty or X_test.empty:
-            raise ValueError("Meta-Model 訓練/測試切分資料不足，請增加歷史資料。")
+        X_eval, y_eval = X[eval_mask], y[eval_mask]
+        if X_train.empty or X_eval.empty:
+            raise ValueError("Meta-Model 訓練/評估切分資料不足，請增加歷史資料。")
+        eval_dates = X_eval.index.get_level_values('time').unique().sort_values()
+        if len(eval_dates) < 2:
+            raise ValueError("Meta-Model 評估資料日期不足，無法分離門檻搜尋與校準。")
+        calibration_start = eval_dates[len(eval_dates) // 2]
+        val_mask = X_eval.index.get_level_values('time') < calibration_start
+        cal_mask = X_eval.index.get_level_values('time') >= calibration_start
+        X_val, y_val = X_eval[val_mask], y_eval[val_mask]
+        X_cal, y_cal = X_eval[cal_mask], y_eval[cal_mask]
+        if X_val.empty or X_cal.empty:
+            raise ValueError("Meta-Model 門檻搜尋/校準切分資料不足，請增加歷史資料。")
         # 改回最強的 gbdt，並加強正規化 (L1/L2) 防止過擬合
         params = {
             'objective': 'binary',
@@ -104,20 +134,21 @@ class MetaLabelingEngine:
         }
         meta_lgbm = lgb.train(params, lgb.Dataset(X_train, label=y_train), num_boost_round=100)
         # 自動尋找最佳過濾門檻 (不再寫死 0.6)
-        test_preds = meta_lgbm.predict(X_test)
+        val_preds = meta_lgbm.predict(X_val)
+        cal_preds = meta_lgbm.predict(X_cal)
         calibration = compute_calibration_report(
-            y_test,
-            test_preds,
+            y_cal,
+            cal_preds,
         )
         kelly_approved = is_kelly_sizing_approved(calibration)
-        base_win_rate = y_test.mean()
+        base_win_rate = y_val.mean()
         # 尋找能讓勝率提升的最大門檻
         best_threshold = 0.5
         best_win_rate = base_win_rate
         for thresh in np.arange(0.5, 0.8, 0.05):
-            filtered_preds = test_preds > thresh
+            filtered_preds = val_preds > thresh
             if filtered_preds.sum() > 10: # 確保至少保留 10 筆交易
-                filtered_win_rate = precision_score(y_test, filtered_preds)
+                filtered_win_rate = precision_score(y_val, filtered_preds, zero_division=0)
                 if filtered_win_rate > best_win_rate:
                     best_win_rate = filtered_win_rate
                     best_threshold = thresh
@@ -140,5 +171,5 @@ if __name__ == "__main__":
     df_labeled = DataAndLabelEngine.create_labels(df)
     # 2. 啟動 Meta-Labeling
     engine = MetaLabelingEngine()
-    events = engine.generate_meta_labels(df_labeled)
+    events = engine.generate_meta_labels(df_labeled, primary_predictions=load_primary_oos_predictions())
     engine.train_meta_model(events)

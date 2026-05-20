@@ -1,6 +1,6 @@
 # AlphaBase V3 Reproducible Research Report
 
-Generated: 2026-05-20 11:08:42 UTC
+Generated: 2026-05-20 14:12:33 UTC
 
 ## Research identity
 
@@ -68,6 +68,14 @@ test window. Single split OOS results are not treated as sufficient evidence.
 | primary_walk_forward_predictions | `artifacts/research/alphabase_v3_research_2026_05/primary_walk_forward_predictions.csv` | missing | `N/A` |
 
 ## Calibration and Kelly sizing decision
+
+Walk-forward metrics summary:
+
+```json
+{
+  "status": "missing"
+}
+```
 
 ```json
 {

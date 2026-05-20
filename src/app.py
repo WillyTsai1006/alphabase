@@ -11,6 +11,7 @@ from utils import get_logger, db_manager
 from quant_engine import DataAndLabelEngine
 from meta_engine import load_meta_artifact
 from backtester import InstitutionalBacktester
+from research import load_primary_oos_predictions, missing_required_artifacts
 logger = get_logger("StreamlitApp")
 
 @st.cache_data(ttl=3600)
@@ -33,13 +34,21 @@ def load_models_and_data(selected_symbols):
     lgbm_model = joblib.load(MODEL_PATHS['lgbm'])
     meta_artifact = load_meta_artifact(MODEL_PATHS['meta'])
     hmm_data = joblib.load(MODEL_PATHS['hmm'])
-    return df, lgbm_model, meta_artifact, hmm_data
+    primary_predictions = load_primary_oos_predictions()
+    return df, lgbm_model, meta_artifact, hmm_data, primary_predictions
 
 @st.cache_data(show_spinner=False)
 def run_backtest_cached(selected_symbols, threshold, sl_mult, tp_mult):
-    df, lgbm_model, meta_artifact, hmm_data = load_models_and_data(tuple(selected_symbols))
+    df, lgbm_model, meta_artifact, hmm_data, primary_predictions = load_models_and_data(tuple(selected_symbols))
     # [V3.0 升級] 傳入 meta_model
-    bt = InstitutionalBacktester(df, lgbm_model, meta_artifact, hmm_data)
+    bt = InstitutionalBacktester(
+        df,
+        lgbm_model,
+        meta_artifact,
+        hmm_data,
+        primary_predictions=primary_predictions,
+        require_oos_predictions=True,
+    )
     bt.params['threshold'] = threshold
     bt.params['sl_mult'] = sl_mult
     bt.params['tp_mult'] = tp_mult
@@ -52,6 +61,13 @@ st.sidebar.title("AlphaBase V3.0 控制")
 st.sidebar.subheader("🎯 選擇投資組合")
 if not available_symbols:
     st.error("無法連線資料庫或尚未初始化 market_data。請確認 DB 已啟動，並先執行 ETL 與模型訓練流程。")
+    st.stop()
+missing_artifacts = missing_required_artifacts()
+if missing_artifacts:
+    st.error(
+        "研究 artifacts 尚未完整產出，暫停績效儀表板以避免發布未驗證數字。"
+        f" 缺少: {', '.join(missing_artifacts)}。請先執行 README 的研究流程。"
+    )
     st.stop()
 default_selections = available_symbols[:3] if len(available_symbols) >= 3 else available_symbols
 selected_symbols = st.sidebar.multiselect("股票池", options=available_symbols, default=default_selections)

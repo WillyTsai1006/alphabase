@@ -9,7 +9,7 @@ SRC = ROOT / "src"
 sys.path.insert(0, str(SRC))
 
 from config import BACKTEST_PARAMS, FEATURES, RESEARCH_CONFIG  # noqa: E402
-from research import sha256_file  # noqa: E402
+from research import artifact_status  # noqa: E402
 
 try:
     import joblib
@@ -22,27 +22,25 @@ def _format_json(data):
 
 
 def collect_artifacts(config=RESEARCH_CONFIG):
-    rows = []
-    for name, path in config["artifact_paths"].items():
-        if name == "report":
-            continue
-        full_path = ROOT / path
-        checksum = sha256_file(full_path)
-        rows.append(
-            {
-                "name": name,
-                "path": path,
-                "status": "present" if checksum else "missing",
-                "sha256": checksum or "N/A",
-            }
-        )
-    return rows
+    return artifact_status(config, ROOT)
 
 
 def render_report(config=RESEARCH_CONFIG):
     artifacts = collect_artifacts(config)
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     missing = [row["name"] for row in artifacts if row["status"] == "missing"]
+    metrics_path = ROOT / config["artifact_paths"]["primary_walk_forward_metrics"]
+    metrics_summary = {"status": "missing"}
+    if metrics_path.exists():
+        import pandas as pd
+
+        metrics = pd.read_csv(metrics_path)
+        metrics_summary = {
+            "fold_count": int(len(metrics)),
+            "mean_auc": None if metrics.empty else float(metrics["auc"].mean()),
+            "min_auc": None if metrics.empty else float(metrics["auc"].min()),
+            "max_auc": None if metrics.empty else float(metrics["auc"].max()),
+        }
     meta_path = ROOT / config["artifact_paths"]["meta_model"]
     calibration_report = None
     kelly_approved = False
@@ -106,6 +104,12 @@ test window. Single split OOS results are not treated as sufficient evidence.
 {artifact_table}
 
 ## Calibration and Kelly sizing decision
+
+Walk-forward metrics summary:
+
+```json
+{_format_json(metrics_summary)}
+```
 
 ```json
 {_format_json(config['calibration'])}

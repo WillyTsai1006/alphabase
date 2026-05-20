@@ -52,6 +52,8 @@ RESEARCH_CONFIG = {
     'train_start': '2016-01-01',
     'walk_forward_start': '2020-01-01',
     'walk_forward_end': '2025-12-31',
+    'hmm_train_end': '2022-12-31',
+    'hmm_oos_start': '2023-01-01',
     'universe': TARGET_SYMBOLS,
     'universe_rule': (
         'Fixed large-cap US equities plus SPY benchmark, selected before the '

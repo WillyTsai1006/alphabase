@@ -62,7 +62,6 @@ class DataAndLabelEngine:
                 if pt.any() and sl.any(): lbl, ext = (1, pt.idxmax()) if pt.idxmax() < sl.idxmax() else (0, sl.idxmax())
                 elif pt.any(): lbl, ext = 1, pt.idxmax()
                 elif sl.any(): lbl, ext = 0, sl.idxmax()
-                elif c.iloc[i+horizon_days] > c.iloc[i]: lbl = 1
                 
                 out_df.loc[(time, sym), ['ret', 'exit_time']] = [lbl, ext]
         df['target'], df['exit_time'] = out_df['ret'], out_df['exit_time']
@@ -124,7 +123,11 @@ class ModelTrainer:
             artifact_dir = Path(artifact_dir)
             artifact_dir.mkdir(parents=True, exist_ok=True)
         for idx, split in enumerate(splits, start=1):
-            tr = (dates >= split["train_start"]) & (dates <= split["train_end"])
+            tr = (
+                (dates >= split["train_start"])
+                & (dates <= split["train_end"])
+                & (pd.to_datetime(self.exits) < split["test_start"])
+            )
             ts = (dates >= split["test_start"]) & (dates <= split["test_end"])
             if tr.sum() == 0 or ts.sum() == 0:
                 continue
