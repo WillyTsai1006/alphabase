@@ -2,8 +2,8 @@ import pandas as pd
 import numpy as np
 import warnings
 import joblib
-import matplotlib.pyplot as plt
 from datetime import timedelta
+from sqlalchemy import text
 # 導入共用配置與工具
 from config import BACKTEST_PARAMS, BENCHMARK_SYMBOL, MODEL_PATHS, FEATURES
 from utils import get_logger, db_manager
@@ -12,12 +12,16 @@ logger = get_logger("Backtester_V3")
 
 class InstitutionalBacktester:
     """整合 HMM 風控、LightGBM 雙重校準 (Meta-Labeling) 與正宗凱利公式的終極回測引擎"""
-    def __init__(self, data_df, primary_model, meta_model, hmm_model_data):
+    def __init__(self, data_df, primary_model, meta_model, hmm_model_data, meta_threshold=None):
         self.data = data_df.copy()
         self.primary_model = primary_model
+        if isinstance(meta_model, dict) and 'model' in meta_model:
+            meta_threshold = meta_model.get('threshold', meta_threshold)
+            meta_model = meta_model['model']
         self.meta_model = meta_model
         self.features = FEATURES
-        self.params = BACKTEST_PARAMS
+        self.params = BACKTEST_PARAMS.copy()
+        self.meta_threshold = BACKTEST_PARAMS['meta_threshold'] if meta_threshold is None else meta_threshold
         # HMM 總經模型設定
         self.hmm_model = hmm_model_data['model']
         self.hmm_map = hmm_model_data['map']
@@ -31,8 +35,12 @@ class InstitutionalBacktester:
     def load_spy_data(self):
         """讀取 SPY 並計算每日的 HMM 狀態"""
         logger.info("📥 載入 SPY 數據並預測歷史大盤狀態...")
-        query = f"SELECT time, close, LN(close / NULLIF(LAG(close, 1) OVER (ORDER BY time), 0)) as log_return FROM market_data WHERE symbol = '{BENCHMARK_SYMBOL}'"
-        spy = pd.read_sql(query, db_manager.engine)
+        query = """
+        SELECT time, close, LN(close / NULLIF(LAG(close, 1) OVER (ORDER BY time), 0)) as log_return
+        FROM market_data
+        WHERE symbol = :symbol
+        """
+        spy = pd.read_sql(text(query), db_manager.engine, params={'symbol': BENCHMARK_SYMBOL})
         spy['time'] = pd.to_datetime(spy['time'])
         spy['volatility_5d'] = spy['log_return'].rolling(window=5).std()
         spy = spy.dropna().set_index('time')
@@ -108,9 +116,11 @@ class InstitutionalBacktester:
             # 3. 收集今日信號
             # 主模型篩選第一層 (>=threshold)
             primary_pass = daily_data[daily_data['primary_prob'] >= self.params['threshold']].reset_index()
-            # Meta-Model 篩選第二層 (確保凱利值 > 0)
+            # Meta-Model 篩選第二層：使用訓練時保存的最佳門檻
             if not primary_pass.empty:
-                prev_signals[current_time + timedelta(days=1)] = primary_pass
+                meta_pass = primary_pass[primary_pass['meta_prob'] >= self.meta_threshold]
+                if not meta_pass.empty:
+                    prev_signals[current_time + timedelta(days=1)] = meta_pass
             # 4. 記錄資產
             self.equity_curve.append({'time': current_time, 'equity': self.cash + sum([self.positions[s] * daily_data.loc[s]['close'] for s in self.positions if s in current_syms])})
         self.equity_df = pd.DataFrame(self.equity_curve).set_index('time')
@@ -124,9 +134,10 @@ if __name__ == "__main__":
     df['volatility'] = df.groupby(level='symbol')['close'].pct_change().ewm(span=100).std()
     df = df.dropna().reset_index()
     lgbm_model = joblib.load(MODEL_PATHS['lgbm'])
-    meta_model = joblib.load(MODEL_PATHS['meta'])
+    from meta_engine import load_meta_model
+    meta_model, meta_threshold = load_meta_model(MODEL_PATHS['meta'])
     hmm_data = joblib.load(MODEL_PATHS['hmm'])
-    bt = InstitutionalBacktester(df, lgbm_model, meta_model, hmm_data)
+    bt = InstitutionalBacktester(df, lgbm_model, meta_model, hmm_data, meta_threshold=meta_threshold)
     bt.generate_signals()
     bt.run_backtest()
     logger.info(f"✅ V3.0 回測完成！最終總資產: ${bt.equity_df['equity'].iloc[-1]:,.2f}")

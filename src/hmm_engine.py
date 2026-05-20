@@ -3,6 +3,7 @@ import numpy as np
 import joblib
 import warnings
 from hmmlearn.hmm import GaussianHMM
+from sqlalchemy import text
 # 導入 V2 共用配置與工具
 from config import BENCHMARK_SYMBOL, MODEL_PATHS
 from utils import get_logger, db_manager
@@ -21,14 +22,14 @@ class MarketRegimeModel:
         """從 PostgreSQL 獲取 SPY (大盤) 數據並計算總經特徵"""
         logger.info(f"📥 正在從資料庫獲取 {BENCHMARK_SYMBOL} (大盤) 數據...")
         # 安全地透過 SQL 獲取收盤價與計算日報酬率
-        query = f"""
+        query = """
         SELECT time, close, 
                LN(close / NULLIF(LAG(close, 1) OVER (ORDER BY time), 0)) as log_return
         FROM market_data 
-        WHERE symbol = '{BENCHMARK_SYMBOL}' 
+        WHERE symbol = :symbol
         ORDER BY time ASC
         """
-        df = pd.read_sql(query, db_manager.engine)
+        df = pd.read_sql(text(query), db_manager.engine, params={'symbol': BENCHMARK_SYMBOL})
         df['time'] = pd.to_datetime(df['time'])
         df = df.set_index('time')
         # 特徵工程：計算 5 日波動率

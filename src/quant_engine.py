@@ -5,9 +5,10 @@ from sklearn.metrics import roc_auc_score
 import optuna
 import joblib
 import warnings
+from sqlalchemy import text, bindparam
 
 # 導入共用配置與工具
-from config import TARGET_SYMBOLS, FEATURES, MODEL_PATHS
+from config import TARGET_SYMBOLS, FEATURES, MODEL_PATHS, LABEL_PARAMS
 from utils import get_logger, db_manager
 
 warnings.filterwarnings('ignore')
@@ -21,26 +22,26 @@ class DataAndLabelEngine:
         logger.info(f"📥 正在加載 {len(symbols)} 檔股票數據...")
         if not symbols:
             return pd.DataFrame()
-        # 方法1：使用字符串拼接但嚴格驗證
         if all(s.isalnum() for s in symbols):
-            symbol_list = "', '".join(symbols)
-            query = f"""
+            query = text("""
             SELECT f.time, f.symbol, f.close, f.log_return, f.ma_20, f.rsi_14, 
                 f.bollinger_upper, f.bollinger_lower, m.open, m.high, m.low
             FROM features_view f
             JOIN market_data m ON f.time = m.time AND f.symbol = m.symbol
-            WHERE f.symbol IN ('{symbol_list}')
+            WHERE f.symbol IN :symbols
             ORDER BY f.time ASC
-            """
-            df = pd.read_sql(query, db_manager.engine)
+            """).bindparams(bindparam("symbols", expanding=True))
+            df = pd.read_sql(query, db_manager.engine, params={"symbols": tuple(symbols)})
         else:
             raise ValueError("股票代碼包含非法字符")
         df['time'] = pd.to_datetime(df['time'])
         return df.set_index(['time', 'symbol'])
 
     @staticmethod
-    def create_labels(df, horizon_days=5, pt_sl=[1.5, 1.0]):
-        """三重屏障標註法 (向量化版本)"""
+    def create_labels(df, horizon_days=None, pt_sl=None):
+        """三重屏障標註法，使用與回測一致的止盈/止損與持倉天數。"""
+        horizon_days = LABEL_PARAMS['horizon_days'] if horizon_days is None else horizon_days
+        pt_sl = LABEL_PARAMS['pt_sl'] if pt_sl is None else pt_sl
         logger.info(f"🔄 開始計算三重屏障標註 (Horizon: {horizon_days} days)...")
         df['volatility'] = df.groupby(level='symbol')['close'].pct_change().ewm(span=100).std()
         out_df = pd.DataFrame(index=df.index)

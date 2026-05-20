@@ -1,7 +1,7 @@
 # 📈 AlphaBase V3.0: Dual-AI Institutional Quant System
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15.0-blue.svg)
+![TimescaleDB](https://img.shields.io/badge/TimescaleDB-pg14-blue.svg)
 ![Dual-AI](https://img.shields.io/badge/Machine_Learning-Dual_LightGBM-green.svg)
 ![Risk](https://img.shields.io/badge/Risk_Management-HMM_%2B_Kelly-red.svg)
 ![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-orange.svg)
@@ -49,20 +49,32 @@ Under strict out-of-sample (OOS) testing with transaction costs, the V3.0 portfo
 ```bash
    pip install -r requirements.txt
 ```
-2. Setup Database: Configure your PostgreSQL credentials in config.py.
+2. **Setup environment and database**:
+```bash
+cp .env.example .env
+docker compose up -d
+```
+
+The defaults in `.env.example` match `docker-compose.yml`. Override `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, and `DB_NAME` for other PostgreSQL/TimescaleDB instances.
 
 3. Run ETL & Train the "Three Brains":
 
-```Bash
-python src/data_loader.py
-python src/quant_engine.py  # Train Primary AI
-python src/meta_engine.py   # Train Meta AI
-python src/hmm_engine.py    # Train Macro HMM
+```bash
+python3 src/data_loader.py
+python3 src/quant_engine.py  # Train Primary AI
+python3 src/meta_engine.py   # Train Meta AI and save its threshold
+python3 src/hmm_engine.py    # Train Macro HMM
 ```
 4. Launch the Quant Dashboard:
 
-```Bash
+```bash
 streamlit run src/app.py
+```
+
+5. Run checks:
+```bash
+python3 -m compileall src
+python3 -m pytest
 ```
 
 ## 🔮 Future Work

@@ -9,14 +9,19 @@ st.set_page_config(page_title="AlphaBase Quant V3.0", page_icon="📈", layout="
 from config import MODEL_PATHS, BACKTEST_PARAMS
 from utils import get_logger, db_manager
 from quant_engine import DataAndLabelEngine
+from meta_engine import load_meta_model
 from backtester import InstitutionalBacktester
 logger = get_logger("StreamlitApp")
 
 @st.cache_data(ttl=3600)
 def get_available_symbols():
     query = "SELECT DISTINCT symbol FROM market_data ORDER BY symbol"
-    with db_manager.engine.connect() as conn:
-        return [row[0] for row in conn.execute(text(query))]
+    try:
+        with db_manager.engine.connect() as conn:
+            return [row[0] for row in conn.execute(text(query))]
+    except Exception as exc:
+        logger.error(f"無法取得股票清單: {exc}")
+        return []
 available_symbols = get_available_symbols()
 
 @st.cache_resource(show_spinner=False)
@@ -26,15 +31,15 @@ def load_models_and_data(selected_symbols):
     df = df.dropna().reset_index()
     # [V3.0 升級] 載入三重大腦：主模型、次模型、HMM 總經模型
     lgbm_model = joblib.load(MODEL_PATHS['lgbm'])
-    meta_model = joblib.load(MODEL_PATHS['meta'])
+    meta_model, meta_threshold = load_meta_model(MODEL_PATHS['meta'])
     hmm_data = joblib.load(MODEL_PATHS['hmm'])
-    return df, lgbm_model, meta_model, hmm_data
+    return df, lgbm_model, meta_model, hmm_data, meta_threshold
 
 @st.cache_data(show_spinner=False)
 def run_backtest_cached(selected_symbols, threshold, sl_mult, tp_mult):
-    df, lgbm_model, meta_model, hmm_data = load_models_and_data(tuple(selected_symbols))
+    df, lgbm_model, meta_model, hmm_data, meta_threshold = load_models_and_data(tuple(selected_symbols))
     # [V3.0 升級] 傳入 meta_model
-    bt = InstitutionalBacktester(df, lgbm_model, meta_model, hmm_data)
+    bt = InstitutionalBacktester(df, lgbm_model, meta_model, hmm_data, meta_threshold=meta_threshold)
     bt.params['threshold'] = threshold
     bt.params['sl_mult'] = sl_mult
     bt.params['tp_mult'] = tp_mult
@@ -45,6 +50,9 @@ def run_backtest_cached(selected_symbols, threshold, sl_mult, tp_mult):
 st.sidebar.image("https://img.icons8.com/fluency/96/artificial-intelligence.png", width=60)
 st.sidebar.title("AlphaBase V3.0 控制")
 st.sidebar.subheader("🎯 選擇投資組合")
+if not available_symbols:
+    st.error("無法連線資料庫或尚未初始化 market_data。請確認 DB 已啟動，並先執行 ETL 與模型訓練流程。")
+    st.stop()
 default_selections = available_symbols[:3] if len(available_symbols) >= 3 else available_symbols
 selected_symbols = st.sidebar.multiselect("股票池", options=available_symbols, default=default_selections)
 st.sidebar.markdown("---")
@@ -56,7 +64,15 @@ st.title("AlphaBase 量化戰情室 V3.0 📊")
 st.markdown("全球頂級對沖基金架構：**主模型找機會 ➜ Meta 模型算勝率 ➜ 凱利公式定注碼 ➜ HMM 避股災**")
 if not selected_symbols: st.stop()
 with st.spinner('🚀 正在運行雙重 AI 與凱利動態回測...'):
-    equity_df, trades_df = run_backtest_cached(selected_symbols, threshold_val, BACKTEST_PARAMS['sl_mult'], BACKTEST_PARAMS['tp_mult'])
+    try:
+        equity_df, trades_df = run_backtest_cached(selected_symbols, threshold_val, BACKTEST_PARAMS['sl_mult'], BACKTEST_PARAMS['tp_mult'])
+    except FileNotFoundError as exc:
+        st.error(f"找不到必要模型檔：{exc.filename}。請依序執行 quant_engine.py、meta_engine.py、hmm_engine.py。")
+        st.stop()
+    except Exception as exc:
+        logger.error(f"回測執行失敗: {exc}")
+        st.error(f"回測執行失敗：{exc}")
+        st.stop()
 if equity_df.empty or trades_df.empty: st.stop()
 final_cap = equity_df['equity'].iloc[-1]
 total_ret = (final_cap / BACKTEST_PARAMS['initial_capital']) - 1
@@ -134,13 +150,16 @@ sortino_ratio = (daily_returns.mean() * 252) / (downside_returns.std() * np.sqrt
 gross_profit = trades_df[trades_df['pnl'] > 0]['pnl'].sum()
 gross_loss = abs(trades_df[trades_df['pnl'] < 0]['pnl'].sum())
 profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
+avg_win = wins['pnl'].mean()
+avg_loss = trades_df[trades_df['pnl'] < 0]['pnl'].mean()
+payoff_ratio = avg_win / abs(avg_loss) if pd.notna(avg_win) and pd.notna(avg_loss) and avg_loss < 0 else None
 
 # 2. 顯示高階指標卡片
 met1, met2, met3, met4 = st.columns(4)
 met1.metric("夏普指標 (Sharpe)", f"{sharpe_ratio:.2f}", help=">1.5為優，>2.0為極神")
 met2.metric("索提諾指標 (Sortino)", f"{sortino_ratio:.2f}", help=">2.0為優，衡量下檔風險")
-met3.metric("獲利因子 (Profit Factor)", f"{profit_factor:.2f}", help=">1.5為穩健，>2.0代表賺多賠少")
-met4.metric("平均盈虧比 (Payoff Ratio)", f"{trades_df[trades_df['pnl']>0]['pnl'].mean() / abs(trades_df[trades_df['pnl']<0]['pnl'].mean()):.2f}", help="每筆獲利/每筆虧損的大小")
+met3.metric("獲利因子 (Profit Factor)", "N/A" if np.isinf(profit_factor) else f"{profit_factor:.2f}", help=">1.5為穩健，>2.0代表賺多賠少")
+met4.metric("平均盈虧比 (Payoff Ratio)", "N/A" if payoff_ratio is None else f"{payoff_ratio:.2f}", help="每筆獲利/每筆虧損的大小")
 
 col_c, col_d = st.columns(2)
 

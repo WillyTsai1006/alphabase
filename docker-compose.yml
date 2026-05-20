@@ -5,9 +5,9 @@ services:
     image: timescale/timescaledb:latest-pg14
     container_name: alphabase_db
     environment:
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_USER=quant
-      - POSTGRES_DB=alphabase
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-password}
+      - POSTGRES_USER=${DB_USER:-quant}
+      - POSTGRES_DB=${DB_NAME:-alphabase}
     ports:
       - "5432:5432"
     volumes:

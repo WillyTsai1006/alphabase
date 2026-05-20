@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import lightgbm as lgb
-from sklearn.metrics import accuracy_score, precision_score
+from sklearn.metrics import precision_score
 import joblib
 import warnings
 # 導入共用配置與工具
@@ -10,6 +10,23 @@ from utils import get_logger
 from quant_engine import DataAndLabelEngine
 warnings.filterwarnings('ignore')
 logger = get_logger("MetaEngine")
+
+def save_meta_model(model, threshold, path=MODEL_PATHS['meta']):
+    """保存 Meta 模型與最佳過濾門檻，避免訓練結果只留在 log。"""
+    artifact = {
+        'model': model,
+        'threshold': float(threshold),
+        'features': FEATURES + ['primary_prob'],
+        'base_threshold': BACKTEST_PARAMS['threshold'],
+    }
+    joblib.dump(artifact, path)
+
+def load_meta_model(path=MODEL_PATHS['meta']):
+    """載入新版 artifact；舊版純模型 pkl 會使用預設門檻。"""
+    artifact = joblib.load(path)
+    if isinstance(artifact, dict) and 'model' in artifact:
+        return artifact['model'], artifact.get('threshold', BACKTEST_PARAMS['meta_threshold'])
+    return artifact, BACKTEST_PARAMS['meta_threshold']
 
 class MetaLabelingEngine:
     """元標註 (Meta-Labeling) 訓練引擎"""
@@ -41,6 +58,8 @@ class MetaLabelingEngine:
     def train_meta_model(self, events):
         """訓練第二大腦 (Meta-Model) - V3.1 強化版"""
         logger.info("🧠 開始訓練 Meta-Model (元模型)...")
+        if events.empty:
+            raise ValueError("Meta-Model 無可訓練事件，請降低主模型門檻或檢查資料。")
         meta_features = FEATURES + ['primary_prob']
         X = events[meta_features]
         y = events['meta_target']
@@ -49,6 +68,8 @@ class MetaLabelingEngine:
         ts_mask = X.index.get_level_values('time') >= split_date
         X_train, y_train = X[tr_mask], y[tr_mask]
         X_test, y_test = X[ts_mask], y[ts_mask]
+        if X_train.empty or X_test.empty:
+            raise ValueError("Meta-Model 訓練/測試切分資料不足，請增加歷史資料。")
         # 改回最強的 gbdt，並加強正規化 (L1/L2) 防止過擬合
         params = {
             'objective': 'binary',
@@ -78,9 +99,9 @@ class MetaLabelingEngine:
                     best_threshold = thresh
         logger.info(f"✅ Meta-Model 訓練完成！(最佳過濾門檻: {best_threshold:.2f})")
         logger.info(f"🏆 【V3.1 雙重過濾成效】 OOS 測試勝率從原本的 {base_win_rate:.2%} 提升至 -> {best_win_rate:.2%} 🚀")
-        MODEL_PATHS['meta'] = 'alphabase_meta.pkl'
-        joblib.dump(meta_lgbm, 'alphabase_meta.pkl')
+        save_meta_model(meta_lgbm, best_threshold)
         logger.info("💾 Meta-Model 已保存。")
+        return meta_lgbm, best_threshold
 
 if __name__ == "__main__":
     from config import TARGET_SYMBOLS
