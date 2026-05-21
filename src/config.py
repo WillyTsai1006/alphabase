@@ -57,7 +57,8 @@ RESEARCH_CONFIG = {
     'universe': TARGET_SYMBOLS,
     'universe_rule': (
         'Fixed large-cap US equities plus SPY benchmark, selected before the '
-        'research run and not changed after seeing backtest results.'
+        'research run and not changed after seeing backtest results. This is '
+        'not a survivorship-free institutional universe.'
     ),
     'data_cleaning_rules': [
         'Keep rows inside the fixed data_start/data_end interval.',
@@ -76,6 +77,10 @@ RESEARCH_CONFIG = {
         'n_bins': 10,
         'max_brier_score_for_kelly': 0.20,
         'max_expected_calibration_error_for_kelly': 0.05,
+    },
+    'quality_gates': {
+        'min_primary_mean_auc': 0.55,
+        'min_primary_fold_auc': 0.50,
     },
     'artifact_paths': {
         'primary_model': 'artifacts/research/alphabase_v3_research_2026_05/primary_lgbm.pkl',

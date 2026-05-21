@@ -9,7 +9,7 @@ SRC = ROOT / "src"
 sys.path.insert(0, str(SRC))
 
 from config import BACKTEST_PARAMS, FEATURES, RESEARCH_CONFIG  # noqa: E402
-from research import artifact_status  # noqa: E402
+from research import artifact_status, research_quality_status  # noqa: E402
 
 try:
     import joblib
@@ -29,18 +29,7 @@ def render_report(config=RESEARCH_CONFIG):
     artifacts = collect_artifacts(config)
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     missing = [row["name"] for row in artifacts if row["status"] == "missing"]
-    metrics_path = ROOT / config["artifact_paths"]["primary_walk_forward_metrics"]
-    metrics_summary = {"status": "missing"}
-    if metrics_path.exists():
-        import pandas as pd
-
-        metrics = pd.read_csv(metrics_path)
-        metrics_summary = {
-            "fold_count": int(len(metrics)),
-            "mean_auc": None if metrics.empty else float(metrics["auc"].mean()),
-            "min_auc": None if metrics.empty else float(metrics["auc"].min()),
-            "max_auc": None if metrics.empty else float(metrics["auc"].max()),
-        }
+    metrics_summary = research_quality_status(config, ROOT)
     meta_path = ROOT / config["artifact_paths"]["meta_model"]
     calibration_report = None
     kelly_approved = False
@@ -110,6 +99,8 @@ Walk-forward metrics summary:
 ```json
 {_format_json(metrics_summary)}
 ```
+
+Primary edge decision: {"Approved" if metrics_summary.get("primary_edge_approved") else "Not approved. Treat dashboard output as exploratory until primary mean/min fold AUC clear the gates."}
 
 ```json
 {_format_json(config['calibration'])}

@@ -11,7 +11,7 @@ from utils import get_logger, db_manager
 from quant_engine import DataAndLabelEngine
 from meta_engine import load_meta_artifact
 from backtester import InstitutionalBacktester
-from research import load_primary_oos_predictions, missing_required_artifacts
+from research import load_primary_oos_predictions, missing_required_artifacts, research_quality_status
 logger = get_logger("StreamlitApp")
 
 @st.cache_data(ttl=3600)
@@ -69,6 +69,7 @@ if missing_artifacts:
         f" 缺少: {', '.join(missing_artifacts)}。請先執行 README 的研究流程。"
     )
     st.stop()
+quality_status = research_quality_status()
 default_selections = available_symbols[:3] if len(available_symbols) >= 3 else available_symbols
 selected_symbols = st.sidebar.multiselect("股票池", options=available_symbols, default=default_selections)
 st.sidebar.markdown("---")
@@ -82,6 +83,12 @@ st.info(
     "此頁可調整參數做互動回測，正式績效請以固定研究報告為準："
     f"`{RESEARCH_CONFIG['artifact_paths']['report']}`。"
 )
+if not quality_status.get("primary_edge_approved", False):
+    st.warning(
+        "Primary walk-forward edge 尚未通過正式門檻；本頁結果僅供探索，"
+        f"mean AUC={quality_status.get('mean_auc', 0):.3f}, "
+        f"min fold AUC={quality_status.get('min_auc', 0):.3f}。"
+    )
 if not selected_symbols: st.stop()
 with st.spinner('🚀 正在運行雙重 AI 與凱利動態回測...'):
     try:

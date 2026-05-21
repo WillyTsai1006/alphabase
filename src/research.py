@@ -171,3 +171,26 @@ def load_primary_oos_predictions(path=None, root=PROJECT_ROOT):
     if missing:
         raise ValueError(f"Primary OOS predictions missing columns: {sorted(missing)}")
     return predictions[["time", "symbol", "primary_prob"]].copy()
+
+
+def research_quality_status(config=RESEARCH_CONFIG, root=PROJECT_ROOT):
+    metrics_path = Path(root) / config["artifact_paths"]["primary_walk_forward_metrics"]
+    if not metrics_path.exists():
+        return {"status": "missing", "primary_edge_approved": False}
+    metrics = pd.read_csv(metrics_path)
+    if metrics.empty:
+        return {"status": "empty", "primary_edge_approved": False}
+    mean_auc = float(metrics["auc"].mean())
+    min_auc = float(metrics["auc"].min())
+    gates = config["quality_gates"]
+    approved = mean_auc >= gates["min_primary_mean_auc"] and min_auc >= gates["min_primary_fold_auc"]
+    return {
+        "status": "present",
+        "fold_count": int(len(metrics)),
+        "mean_auc": mean_auc,
+        "min_auc": min_auc,
+        "max_auc": float(metrics["auc"].max()),
+        "primary_edge_approved": bool(approved),
+        "required_mean_auc": gates["min_primary_mean_auc"],
+        "required_min_fold_auc": gates["min_primary_fold_auc"],
+    }

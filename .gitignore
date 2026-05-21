@@ -8,3 +8,4 @@ venv/
 artifacts/*
 !artifacts/research/
 !artifacts/research/**
+artifacts/research/**/primary_lgbm_fold_*.pkl

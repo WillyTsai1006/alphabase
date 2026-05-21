@@ -1,6 +1,6 @@
 # AlphaBase V3 Reproducible Research Report
 
-Generated: 2026-05-20 14:55:49 UTC
+Generated: 2026-05-21 02:50:50 UTC
 
 ## Research identity
 
@@ -11,7 +11,7 @@ Generated: 2026-05-20 14:55:49 UTC
 
 ## Universe rule
 
-Fixed large-cap US equities plus SPY benchmark, selected before the research run and not changed after seeing backtest results.
+Fixed large-cap US equities plus SPY benchmark, selected before the research run and not changed after seeing backtest results. This is not a survivorship-free institutional universe.
 
 Fixed universe:
 
@@ -61,7 +61,7 @@ test window. Single split OOS results are not treated as sufficient evidence.
 
 | Artifact | Path | Status | SHA256 |
 | --- | --- | --- | --- |
-| primary_model | `artifacts/research/alphabase_v3_research_2026_05/primary_lgbm.pkl` | present | `d3614af0947b04728c037a6f0029c19ca38fe0a3a66372f9961d39c639c20d12` |
+| primary_model | `artifacts/research/alphabase_v3_research_2026_05/primary_lgbm.pkl` | present | `9a2fa1a03bb57262cc1881e094da7735c02440f47b39c18dc6c922e5293e888a` |
 | meta_model | `artifacts/research/alphabase_v3_research_2026_05/meta_lgbm.pkl` | present | `ca856ad6a5137df34bf77fd31557b2aaec2712647392a23bb8127223823e71f4` |
 | hmm_model | `artifacts/research/alphabase_v3_research_2026_05/hmm_model.pkl` | present | `bd0563634319e23550ddc00b93e1c4a4734b9c9da398fdf056015368c6fdf78d` |
 | primary_walk_forward_metrics | `artifacts/research/alphabase_v3_research_2026_05/primary_walk_forward_metrics.csv` | present | `8a89594a96dddf57a8f0301a6581f64dc321ee8c01198f07da0ebb1b762ae637` |
@@ -76,9 +76,15 @@ Walk-forward metrics summary:
   "fold_count": 12,
   "max_auc": 0.5615405999261232,
   "mean_auc": 0.5158297856981718,
-  "min_auc": 0.4720880173466381
+  "min_auc": 0.4720880173466381,
+  "primary_edge_approved": false,
+  "required_mean_auc": 0.55,
+  "required_min_fold_auc": 0.5,
+  "status": "present"
 }
 ```
+
+Primary edge decision: Not approved. Treat dashboard output as exploratory until primary mean/min fold AUC clear the gates.
 
 ```json
 {
