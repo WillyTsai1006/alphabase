@@ -102,6 +102,14 @@ Walk-forward metrics summary:
 
 Primary edge decision: {"Approved" if metrics_summary.get("primary_edge_approved") else "Not approved. Treat dashboard output as exploratory until primary mean/min fold AUC clear the gates."}
 
+ML vs baseline summary:
+
+```json
+{_format_json(metrics_summary.get('strategy_summary', {'status': 'missing'}))}
+```
+
+Strategy edge decision: {"Approved" if metrics_summary.get('strategy_edge_approved') else "Not approved. ML top-k must beat the momentum baseline on mean relative return."}
+
 ```json
 {_format_json(config['calibration'])}
 ```

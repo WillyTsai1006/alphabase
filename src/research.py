@@ -173,8 +173,99 @@ def load_primary_oos_predictions(path=None, root=PROJECT_ROOT):
     return predictions[["time", "symbol", "primary_prob"]].copy()
 
 
+def add_forward_returns(df, horizon_days, benchmark_symbol=None):
+    """Add absolute and benchmark-relative forward returns for ranking evaluation."""
+    data = df.reset_index() if isinstance(df.index, pd.MultiIndex) else df.copy()
+    data["time"] = pd.to_datetime(data["time"])
+    data = data.sort_values(["symbol", "time"]).copy()
+    if "return_20" not in data.columns:
+        data["return_20"] = data.groupby("symbol")["close"].pct_change(20)
+    data["forward_close"] = data.groupby("symbol")["close"].shift(-horizon_days)
+    data["forward_return"] = (data["forward_close"] / data["close"]) - 1.0
+    if benchmark_symbol and benchmark_symbol in set(data["symbol"]):
+        benchmark = data[data["symbol"] == benchmark_symbol][["time", "forward_return"]].rename(
+            columns={"forward_return": "benchmark_forward_return"}
+        )
+        data = data.merge(benchmark, on="time", how="left")
+        data["relative_forward_return"] = data["forward_return"] - data["benchmark_forward_return"]
+    else:
+        data["benchmark_forward_return"] = np.nan
+        data["relative_forward_return"] = data["forward_return"]
+    return data
+
+
+def evaluate_topk_strategies(predictions, returns_df, folds, top_k=3, score_column="primary_prob"):
+    """Compare ML top-k picks with simple momentum and equal-weight baselines per fold."""
+    pred = predictions.copy()
+    pred["time"] = pd.to_datetime(pred["time"])
+    returns = returns_df.copy()
+    returns["time"] = pd.to_datetime(returns["time"])
+    merged = pred.merge(
+        returns[["time", "symbol", "forward_return", "relative_forward_return", "return_20"]],
+        on=["time", "symbol"],
+        how="left",
+    ).dropna(subset=["forward_return", "relative_forward_return"])
+
+    rows = []
+    for _, fold in folds.iterrows():
+        fold_data = merged[
+            (merged["time"] >= pd.Timestamp(fold["test_start"]))
+            & (merged["time"] <= pd.Timestamp(fold["test_end"]))
+        ].copy()
+        if fold_data.empty:
+            rows.append({"fold": int(fold.get("fold", len(rows) + 1)), "strategy": "ml_topk", "trade_count": 0})
+            continue
+
+        daily = fold_data.groupby("time", group_keys=False)
+        strategies = {
+            "ml_topk": daily.apply(lambda g: g.nlargest(top_k, score_column), include_groups=False),
+            "momentum_topk": daily.apply(lambda g: g.nlargest(top_k, "return_20"), include_groups=False),
+            "equal_weight": fold_data,
+        }
+        for name, picks in strategies.items():
+            picks = picks.dropna(subset=["forward_return"])
+            rows.append(
+                {
+                    "fold": int(fold.get("fold", len(rows) + 1)),
+                    "strategy": name,
+                    "trade_count": int(len(picks)),
+                    "mean_forward_return": float(picks["forward_return"].mean()) if not picks.empty else np.nan,
+                    "mean_relative_return": float(picks["relative_forward_return"].mean()) if not picks.empty else np.nan,
+                    "hit_rate": float((picks["forward_return"] > 0).mean()) if not picks.empty else np.nan,
+                    "test_start": fold["test_start"],
+                    "test_end": fold["test_end"],
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def summarize_strategy_metrics(strategy_metrics):
+    if strategy_metrics is None or strategy_metrics.empty:
+        return {"status": "missing", "ml_vs_momentum_approved": False}
+    pivot = strategy_metrics.pivot_table(
+        index="fold",
+        columns="strategy",
+        values="mean_relative_return",
+        aggfunc="mean",
+    )
+    if "ml_topk" not in pivot or "momentum_topk" not in pivot:
+        return {"status": "missing", "ml_vs_momentum_approved": False}
+    spread = pivot["ml_topk"] - pivot["momentum_topk"]
+    return {
+        "status": "present",
+        "fold_count": int(spread.dropna().shape[0]),
+        "ml_mean_relative_return": float(pivot["ml_topk"].mean()),
+        "momentum_mean_relative_return": float(pivot["momentum_topk"].mean()),
+        "equal_weight_mean_relative_return": float(pivot.get("equal_weight", pd.Series(dtype=float)).mean()),
+        "ml_minus_momentum": float(spread.mean()),
+        "ml_beats_momentum_folds": int((spread > 0).sum()),
+        "ml_vs_momentum_approved": bool(spread.mean() > 0 and (spread > 0).sum() >= max(1, len(spread.dropna()) // 2)),
+    }
+
+
 def research_quality_status(config=RESEARCH_CONFIG, root=PROJECT_ROOT):
     metrics_path = Path(root) / config["artifact_paths"]["primary_walk_forward_metrics"]
+    strategy_path = Path(root) / config["artifact_paths"].get("fold_strategy_metrics", "")
     if not metrics_path.exists():
         return {"status": "missing", "primary_edge_approved": False}
     metrics = pd.read_csv(metrics_path)
@@ -184,13 +275,21 @@ def research_quality_status(config=RESEARCH_CONFIG, root=PROJECT_ROOT):
     min_auc = float(metrics["auc"].min())
     gates = config["quality_gates"]
     approved = mean_auc >= gates["min_primary_mean_auc"] and min_auc >= gates["min_primary_fold_auc"]
+    strategy_summary = (
+        summarize_strategy_metrics(pd.read_csv(strategy_path))
+        if strategy_path and strategy_path.exists()
+        else {"status": "missing", "ml_vs_momentum_approved": False}
+    )
+    primary_edge_approved = bool(approved)
     return {
         "status": "present",
         "fold_count": int(len(metrics)),
         "mean_auc": mean_auc,
         "min_auc": min_auc,
         "max_auc": float(metrics["auc"].max()),
-        "primary_edge_approved": bool(approved),
+        "primary_edge_approved": primary_edge_approved,
         "required_mean_auc": gates["min_primary_mean_auc"],
         "required_min_fold_auc": gates["min_primary_fold_auc"],
+        "strategy_summary": strategy_summary,
+        "strategy_edge_approved": bool(strategy_summary.get("ml_vs_momentum_approved", False)),
     }

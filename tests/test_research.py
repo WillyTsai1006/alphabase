@@ -1,10 +1,13 @@
 import pandas as pd
 
 from research import (
+    add_forward_returns,
     build_walk_forward_splits,
     clean_market_data,
     compute_calibration_report,
+    evaluate_topk_strategies,
     is_kelly_sizing_approved,
+    summarize_strategy_metrics,
 )
 
 
@@ -85,3 +88,54 @@ def test_primary_oos_prediction_loader_requires_columns(tmp_path):
         assert "primary_prob" in str(exc)
     else:
         raise AssertionError("Expected missing primary_prob to fail")
+
+
+def test_strategy_evaluation_compares_ml_to_momentum():
+    dates = pd.to_datetime(["2024-01-01", "2024-01-01", "2024-01-02", "2024-01-02"])
+    returns = pd.DataFrame(
+        {
+            "time": dates,
+            "symbol": ["AAPL", "MSFT", "AAPL", "MSFT"],
+            "close": [100, 100, 110, 90],
+            "return_20": [0.2, 0.1, 0.2, 0.1],
+            "forward_return": [0.05, -0.02, 0.04, -0.01],
+            "relative_forward_return": [0.04, -0.03, 0.03, -0.02],
+        }
+    )
+    predictions = pd.DataFrame(
+        {
+            "time": dates,
+            "symbol": ["AAPL", "MSFT", "AAPL", "MSFT"],
+            "primary_prob": [0.9, 0.1, 0.8, 0.2],
+        }
+    )
+    folds = pd.DataFrame(
+        [{"fold": 1, "test_start": pd.Timestamp("2024-01-01"), "test_end": pd.Timestamp("2024-01-02")}]
+    )
+
+    metrics = evaluate_topk_strategies(predictions, returns, folds, top_k=1)
+    summary = summarize_strategy_metrics(metrics)
+
+    assert set(metrics["strategy"]) == {"ml_topk", "momentum_topk", "equal_weight"}
+    assert summary["ml_vs_momentum_approved"] is False
+    assert summary["fold_count"] == 1
+
+
+def test_add_forward_returns_adds_relative_returns():
+    df = pd.DataFrame(
+        {
+            "time": pd.to_datetime(["2024-01-01", "2024-01-02", "2024-01-01", "2024-01-02"]),
+            "symbol": ["AAPL", "AAPL", "SPY", "SPY"],
+            "open": [100, 110, 100, 105],
+            "high": [101, 111, 101, 106],
+            "low": [99, 109, 99, 104],
+            "close": [100, 110, 100, 105],
+            "volume": [1, 1, 1, 1],
+        }
+    )
+
+    result = add_forward_returns(df, horizon_days=1, benchmark_symbol="SPY")
+    aapl = result[(result["symbol"] == "AAPL") & (result["time"] == pd.Timestamp("2024-01-01"))].iloc[0]
+
+    assert round(aapl["forward_return"], 2) == 0.10
+    assert round(aapl["relative_forward_return"], 2) == 0.05

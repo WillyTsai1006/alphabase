@@ -19,8 +19,9 @@ DB_URI = (
     f"{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['dbname']}"
 )
 # 2. 交易標的與回測配置 (Trading & Backtest)
-TARGET_SYMBOLS = ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'SPY', 'INTC', 'PYPL', 'PFE', 'ZM']
+TRADABLE_SYMBOLS = ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'INTC', 'PYPL', 'PFE', 'ZM']
 BENCHMARK_SYMBOL = 'SPY'
+TARGET_SYMBOLS = TRADABLE_SYMBOLS + [BENCHMARK_SYMBOL]
 BACKTEST_PARAMS = {
     'initial_capital': 100000,
     'tc': 0.001,           # 0.1% 手續費
@@ -54,7 +55,7 @@ RESEARCH_CONFIG = {
     'walk_forward_end': '2025-12-31',
     'hmm_train_end': '2022-12-31',
     'hmm_oos_start': '2023-01-01',
-    'universe': TARGET_SYMBOLS,
+    'universe': TRADABLE_SYMBOLS,
     'universe_rule': (
         'Fixed large-cap US equities plus SPY benchmark, selected before the '
         'research run and not changed after seeing backtest results. This is '
@@ -88,6 +89,7 @@ RESEARCH_CONFIG = {
         'hmm_model': 'artifacts/research/alphabase_v3_research_2026_05/hmm_model.pkl',
         'primary_walk_forward_metrics': 'artifacts/research/alphabase_v3_research_2026_05/primary_walk_forward_metrics.csv',
         'primary_walk_forward_predictions': 'artifacts/research/alphabase_v3_research_2026_05/primary_walk_forward_predictions.csv',
+        'fold_strategy_metrics': 'artifacts/research/alphabase_v3_research_2026_05/fold_strategy_metrics.csv',
         'report': 'docs/research/backtest_report.md',
     },
 }

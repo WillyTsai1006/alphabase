@@ -1,6 +1,6 @@
 # AlphaBase V3 Reproducible Research Report
 
-Generated: 2026-05-21 02:50:50 UTC
+Generated: 2026-05-23 05:33:54 UTC
 
 ## Research identity
 
@@ -15,7 +15,7 @@ Fixed large-cap US equities plus SPY benchmark, selected before the research run
 
 Fixed universe:
 
-`AAPL, MSFT, NVDA, GOOGL, AMZN, SPY, INTC, PYPL, PFE, ZM`
+`AAPL, MSFT, NVDA, GOOGL, AMZN, INTC, PYPL, PFE, ZM`
 
 ## Data cleaning rules
 
@@ -61,11 +61,12 @@ test window. Single split OOS results are not treated as sufficient evidence.
 
 | Artifact | Path | Status | SHA256 |
 | --- | --- | --- | --- |
-| primary_model | `artifacts/research/alphabase_v3_research_2026_05/primary_lgbm.pkl` | present | `9a2fa1a03bb57262cc1881e094da7735c02440f47b39c18dc6c922e5293e888a` |
-| meta_model | `artifacts/research/alphabase_v3_research_2026_05/meta_lgbm.pkl` | present | `ca856ad6a5137df34bf77fd31557b2aaec2712647392a23bb8127223823e71f4` |
-| hmm_model | `artifacts/research/alphabase_v3_research_2026_05/hmm_model.pkl` | present | `bd0563634319e23550ddc00b93e1c4a4734b9c9da398fdf056015368c6fdf78d` |
-| primary_walk_forward_metrics | `artifacts/research/alphabase_v3_research_2026_05/primary_walk_forward_metrics.csv` | present | `8a89594a96dddf57a8f0301a6581f64dc321ee8c01198f07da0ebb1b762ae637` |
-| primary_walk_forward_predictions | `artifacts/research/alphabase_v3_research_2026_05/primary_walk_forward_predictions.csv` | present | `e236b1c3729ef6aba7f48637c6de16366463f7d6317bb15a47895f00a781c9d8` |
+| primary_model | `artifacts/research/alphabase_v3_research_2026_05/primary_lgbm.pkl` | present | `72c088730a5bf8f4c4275980921039d7b22fa80024fe84d46aa5162538f65b7e` |
+| meta_model | `artifacts/research/alphabase_v3_research_2026_05/meta_lgbm.pkl` | present | `f3d7cf2b5807bf5b1110408e00d330a7d8ea13ac2e999d9343bdca783d273104` |
+| hmm_model | `artifacts/research/alphabase_v3_research_2026_05/hmm_model.pkl` | present | `9c49516cdac642fc3c5a258a6f3697cb8a05bfb88f3f584952e17d63b45d6ade` |
+| primary_walk_forward_metrics | `artifacts/research/alphabase_v3_research_2026_05/primary_walk_forward_metrics.csv` | present | `e4772e6ad99221377a6ca6ac023f868379cf9ee8b0f4fe4a75e5ebb05e8697ae` |
+| primary_walk_forward_predictions | `artifacts/research/alphabase_v3_research_2026_05/primary_walk_forward_predictions.csv` | present | `39c2131a082a407a0668a0e7cd368d3adffc4c05d481fe2ca6cb60c25e937549` |
+| fold_strategy_metrics | `artifacts/research/alphabase_v3_research_2026_05/fold_strategy_metrics.csv` | present | `70c32ada02a83724b2c7783de2769e2c16c57f382a88d2c314a11588c27442a3` |
 
 ## Calibration and Kelly sizing decision
 
@@ -74,17 +75,45 @@ Walk-forward metrics summary:
 ```json
 {
   "fold_count": 12,
-  "max_auc": 0.5615405999261232,
-  "mean_auc": 0.5158297856981718,
-  "min_auc": 0.4720880173466381,
+  "max_auc": 0.570510297783025,
+  "mean_auc": 0.4953117294324798,
+  "min_auc": 0.4249193040729678,
   "primary_edge_approved": false,
   "required_mean_auc": 0.55,
   "required_min_fold_auc": 0.5,
-  "status": "present"
+  "status": "present",
+  "strategy_edge_approved": false,
+  "strategy_summary": {
+    "equal_weight_mean_relative_return": 0.0033059570022440908,
+    "fold_count": 12,
+    "ml_beats_momentum_folds": 4,
+    "ml_mean_relative_return": 0.001483771745850633,
+    "ml_minus_momentum": -0.006027754004986591,
+    "ml_vs_momentum_approved": false,
+    "momentum_mean_relative_return": 0.007511525750837225,
+    "status": "present"
+  }
 }
 ```
 
 Primary edge decision: Not approved. Treat dashboard output as exploratory until primary mean/min fold AUC clear the gates.
+
+ML vs baseline summary:
+
+```json
+{
+  "equal_weight_mean_relative_return": 0.0033059570022440908,
+  "fold_count": 12,
+  "ml_beats_momentum_folds": 4,
+  "ml_mean_relative_return": 0.001483771745850633,
+  "ml_minus_momentum": -0.006027754004986591,
+  "ml_vs_momentum_approved": false,
+  "momentum_mean_relative_return": 0.007511525750837225,
+  "status": "present"
+}
+```
+
+Strategy edge decision: Not approved. ML top-k must beat the momentum baseline on mean relative return.
 
 ```json
 {
@@ -121,11 +150,11 @@ Saved calibration report:
       "mean_prob": null
     },
     {
-      "abs_error": 0.020019392362268684,
+      "abs_error": 0.06456105120329797,
       "bin": 3,
-      "count": 937,
-      "empirical_rate": 0.3799359658484525,
-      "mean_prob": 0.35991657348618383
+      "count": 828,
+      "empirical_rate": 0.40217391304347827,
+      "mean_prob": 0.3376128618401803
     },
     {
       "abs_error": null,
@@ -170,10 +199,10 @@ Saved calibration report:
       "mean_prob": null
     }
   ],
-  "brier_score": 0.23604267783084368,
-  "expected_calibration_error": 0.020019392362268684,
-  "max_calibration_error": 0.020019392362268684,
-  "sample_count": 937
+  "brier_score": 0.24436715028252215,
+  "expected_calibration_error": 0.06456105120329797,
+  "max_calibration_error": 0.06456105120329797,
+  "sample_count": 828
 }
 ```
 
