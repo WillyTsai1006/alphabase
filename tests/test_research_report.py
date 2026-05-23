@@ -21,6 +21,7 @@ def test_research_report_marks_missing_artifacts():
         "hmm_model",
         "primary_walk_forward_metrics",
         "primary_walk_forward_predictions",
+        "ranker_walk_forward_predictions",
         "fold_strategy_metrics",
     }
     assert all(row["status"] in {"present", "missing"} for row in artifacts)

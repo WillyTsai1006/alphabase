@@ -239,6 +239,49 @@ def evaluate_topk_strategies(predictions, returns_df, folds, top_k=3, score_colu
     return pd.DataFrame(rows)
 
 
+def daily_zscore(df, column):
+    grouped = df.groupby("time")[column]
+    std = grouped.transform("std").replace(0, np.nan)
+    return ((df[column] - grouped.transform("mean")) / std).fillna(0)
+
+
+def topk_mean_relative_return(df, score_column, top_k=3):
+    if df.empty:
+        return np.nan
+    picks = df.groupby("time", group_keys=False).apply(
+        lambda group: group.nlargest(top_k, score_column),
+        include_groups=False,
+    )
+    if picks.empty:
+        return np.nan
+    return float(picks["relative_forward_return"].mean())
+
+
+def select_hybrid_alpha(validation_df, alpha_grid=None, top_k=3):
+    alpha_grid = alpha_grid or [-2, -1, -0.5, 0, 0.5, 1, 2]
+    if validation_df.empty:
+        return 0.0
+    validation = validation_df.copy()
+    validation["rank_z"] = daily_zscore(validation, "rank_score")
+    validation["momentum_z"] = daily_zscore(validation, "return_20")
+    best_alpha, best_score = 0.0, -np.inf
+    for alpha in alpha_grid:
+        validation["hybrid_score"] = validation["momentum_z"] + (alpha * validation["rank_z"])
+        score = topk_mean_relative_return(validation, "hybrid_score", top_k=top_k)
+        if pd.notna(score) and score > best_score:
+            best_alpha = float(alpha)
+            best_score = score
+    return best_alpha
+
+
+def apply_hybrid_score(df, alpha):
+    scored = df.copy()
+    scored["rank_z"] = daily_zscore(scored, "rank_score")
+    scored["momentum_z"] = daily_zscore(scored, "return_20")
+    scored["hybrid_score"] = scored["momentum_z"] + (alpha * scored["rank_z"])
+    return scored
+
+
 def summarize_strategy_metrics(strategy_metrics):
     if strategy_metrics is None or strategy_metrics.empty:
         return {"status": "missing", "ml_vs_momentum_approved": False}

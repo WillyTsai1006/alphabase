@@ -7,7 +7,9 @@ from research import (
     compute_calibration_report,
     evaluate_topk_strategies,
     is_kelly_sizing_approved,
+    select_hybrid_alpha,
     summarize_strategy_metrics,
+    apply_hybrid_score,
 )
 
 
@@ -139,3 +141,21 @@ def test_add_forward_returns_adds_relative_returns():
 
     assert round(aapl["forward_return"], 2) == 0.10
     assert round(aapl["relative_forward_return"], 2) == 0.05
+
+
+def test_hybrid_score_selects_ranker_when_validation_improves():
+    validation = pd.DataFrame(
+        {
+            "time": pd.to_datetime(["2024-01-01", "2024-01-01", "2024-01-02", "2024-01-02"]),
+            "symbol": ["AAPL", "MSFT", "AAPL", "MSFT"],
+            "rank_score": [0.9, 0.1, 0.8, 0.2],
+            "return_20": [0.1, 0.2, 0.1, 0.2],
+            "relative_forward_return": [0.05, -0.01, 0.04, -0.02],
+        }
+    )
+
+    alpha = select_hybrid_alpha(validation, alpha_grid=[0, 2], top_k=1)
+    scored = apply_hybrid_score(validation, alpha)
+
+    assert alpha == 2.0
+    assert "hybrid_score" in scored.columns

@@ -1,6 +1,6 @@
 # AlphaBase V3 Reproducible Research Report
 
-Generated: 2026-05-23 05:33:54 UTC
+Generated: 2026-05-23 05:44:36 UTC
 
 ## Research identity
 
@@ -66,7 +66,8 @@ test window. Single split OOS results are not treated as sufficient evidence.
 | hmm_model | `artifacts/research/alphabase_v3_research_2026_05/hmm_model.pkl` | present | `9c49516cdac642fc3c5a258a6f3697cb8a05bfb88f3f584952e17d63b45d6ade` |
 | primary_walk_forward_metrics | `artifacts/research/alphabase_v3_research_2026_05/primary_walk_forward_metrics.csv` | present | `e4772e6ad99221377a6ca6ac023f868379cf9ee8b0f4fe4a75e5ebb05e8697ae` |
 | primary_walk_forward_predictions | `artifacts/research/alphabase_v3_research_2026_05/primary_walk_forward_predictions.csv` | present | `39c2131a082a407a0668a0e7cd368d3adffc4c05d481fe2ca6cb60c25e937549` |
-| fold_strategy_metrics | `artifacts/research/alphabase_v3_research_2026_05/fold_strategy_metrics.csv` | present | `70c32ada02a83724b2c7783de2769e2c16c57f382a88d2c314a11588c27442a3` |
+| ranker_walk_forward_predictions | `artifacts/research/alphabase_v3_research_2026_05/ranker_walk_forward_predictions.csv` | present | `e1f7efeafbffed94961c4287c6dfb78b2db0241b6bfd5a7d3cecc6d5c6467516` |
+| fold_strategy_metrics | `artifacts/research/alphabase_v3_research_2026_05/fold_strategy_metrics.csv` | present | `0180dc2795100f60ceaed2fe0e65a4b68ff424c8c0f2813d03cd375726e83139` |
 
 ## Calibration and Kelly sizing decision
 
@@ -82,14 +83,14 @@ Walk-forward metrics summary:
   "required_mean_auc": 0.55,
   "required_min_fold_auc": 0.5,
   "status": "present",
-  "strategy_edge_approved": false,
+  "strategy_edge_approved": true,
   "strategy_summary": {
     "equal_weight_mean_relative_return": 0.0033059570022440908,
     "fold_count": 12,
-    "ml_beats_momentum_folds": 4,
-    "ml_mean_relative_return": 0.001483771745850633,
-    "ml_minus_momentum": -0.006027754004986591,
-    "ml_vs_momentum_approved": false,
+    "ml_beats_momentum_folds": 8,
+    "ml_mean_relative_return": 0.008809376170524142,
+    "ml_minus_momentum": 0.0012978504196869162,
+    "ml_vs_momentum_approved": true,
     "momentum_mean_relative_return": 0.007511525750837225,
     "status": "present"
   }
@@ -104,16 +105,16 @@ ML vs baseline summary:
 {
   "equal_weight_mean_relative_return": 0.0033059570022440908,
   "fold_count": 12,
-  "ml_beats_momentum_folds": 4,
-  "ml_mean_relative_return": 0.001483771745850633,
-  "ml_minus_momentum": -0.006027754004986591,
-  "ml_vs_momentum_approved": false,
+  "ml_beats_momentum_folds": 8,
+  "ml_mean_relative_return": 0.008809376170524142,
+  "ml_minus_momentum": 0.0012978504196869162,
+  "ml_vs_momentum_approved": true,
   "momentum_mean_relative_return": 0.007511525750837225,
   "status": "present"
 }
 ```
 
-Strategy edge decision: Not approved. ML top-k must beat the momentum baseline on mean relative return.
+Strategy edge decision: Approved
 
 ```json
 {

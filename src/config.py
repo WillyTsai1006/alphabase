@@ -89,6 +89,7 @@ RESEARCH_CONFIG = {
         'hmm_model': 'artifacts/research/alphabase_v3_research_2026_05/hmm_model.pkl',
         'primary_walk_forward_metrics': 'artifacts/research/alphabase_v3_research_2026_05/primary_walk_forward_metrics.csv',
         'primary_walk_forward_predictions': 'artifacts/research/alphabase_v3_research_2026_05/primary_walk_forward_predictions.csv',
+        'ranker_walk_forward_predictions': 'artifacts/research/alphabase_v3_research_2026_05/ranker_walk_forward_predictions.csv',
         'fold_strategy_metrics': 'artifacts/research/alphabase_v3_research_2026_05/fold_strategy_metrics.csv',
         'report': 'docs/research/backtest_report.md',
     },
