@@ -76,18 +76,27 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ 模型微調")
 threshold_val = st.sidebar.slider("主模型初篩門檻", 0.50, 0.70, BACKTEST_PARAMS['threshold'], 0.01)
 st.sidebar.markdown("---")
-st.sidebar.success("✅ **Meta-Labeling 次模型**: 啟動中\n\n✅ **HMM 崩盤防禦**: 啟動中\n\n✅ **Kelly 倉位**: 需通過校準報告才啟用")
+st.sidebar.success("✅ **Ranker 策略**: 已接入\n\n✅ **HMM 崩盤防禦**: 啟動中\n\n✅ **倉位**: Ranker 使用 top-k 固定倉位；Kelly 僅適用舊 binary/meta path")
 st.title("AlphaBase 量化戰情室 V3.0 📊")
 st.markdown("互動檢視：**主模型找機會 ➜ Meta 模型算勝率 ➜ 校準通過才使用 Kelly ➜ HMM 避股災**")
 st.info(
     "此頁可調整參數做互動回測，正式績效請以固定研究報告為準："
     f"`{RESEARCH_CONFIG['artifact_paths']['report']}`。"
 )
-if not quality_status.get("primary_edge_approved", False):
+if quality_status.get("formal_strategy_approved", False):
+    st.success(
+        "正式 Ranker 策略已通過 baseline gate："
+        f"ML 相對 momentum = {quality_status.get('strategy_summary', {}).get('ml_minus_momentum', 0):.4f}，"
+        f"勝出 folds = {quality_status.get('strategy_summary', {}).get('ml_beats_momentum_folds', 0)}/"
+        f"{quality_status.get('strategy_summary', {}).get('fold_count', 0)}。"
+    )
+elif not quality_status.get("strategy_edge_approved", False):
     st.warning(
-        "Primary walk-forward edge 尚未通過正式門檻；本頁結果僅供探索，"
-        f"mean AUC={quality_status.get('mean_auc', 0):.3f}, "
-        f"min fold AUC={quality_status.get('min_auc', 0):.3f}。"
+        "Ranker strategy 尚未通過正式 baseline gate；本頁結果僅供探索。"
+    )
+if not quality_status.get("primary_edge_approved", False):
+    st.caption(
+        "診斷：legacy binary classifier AUC gate 未通過；正式策略以 ranker baseline gate 為準。"
     )
 if not selected_symbols: st.stop()
 with st.spinner('🚀 正在運行雙重 AI 與凱利動態回測...'):

@@ -8,7 +8,8 @@ def test_research_report_contains_fixed_protocol():
     assert "Walk-forward / rolling retrain protocol" in report
     assert "Walk-forward metrics summary" in report
     assert "ML vs baseline summary" in report
-    assert "Calibration and Kelly sizing decision" in report
+    assert "Strategy approval, diagnostics, and Kelly decision" in report
+    assert "Formal ranker strategy decision" in report
     assert "No return, win-rate, or drawdown claim should be published" in report
 
 

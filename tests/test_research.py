@@ -159,3 +159,35 @@ def test_hybrid_score_selects_ranker_when_validation_improves():
 
     assert alpha == 2.0
     assert "hybrid_score" in scored.columns
+
+
+def test_research_quality_uses_strategy_gate(tmp_path):
+    from config import RESEARCH_CONFIG
+    from research import research_quality_status
+
+    artifact_dir = tmp_path / "artifacts"
+    artifact_dir.mkdir()
+    metrics_path = artifact_dir / "metrics.csv"
+    strategy_path = artifact_dir / "strategy.csv"
+    pd.DataFrame({"auc": [0.49, 0.50], "fold": [1, 2]}).to_csv(metrics_path, index=False)
+    pd.DataFrame(
+        {
+            "fold": [1, 1, 2, 2],
+            "strategy": ["ml_topk", "momentum_topk", "ml_topk", "momentum_topk"],
+            "mean_relative_return": [0.03, 0.01, 0.02, 0.01],
+        }
+    ).to_csv(strategy_path, index=False)
+    config = {
+        **RESEARCH_CONFIG,
+        "artifact_paths": {
+            **RESEARCH_CONFIG["artifact_paths"],
+            "primary_walk_forward_metrics": "artifacts/metrics.csv",
+            "fold_strategy_metrics": "artifacts/strategy.csv",
+        },
+    }
+
+    status = research_quality_status(config=config, root=tmp_path)
+
+    assert status["primary_edge_approved"] is False
+    assert status["strategy_edge_approved"] is True
+    assert status["formal_strategy_approved"] is True

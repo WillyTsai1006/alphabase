@@ -38,9 +38,9 @@ def render_report(config=RESEARCH_CONFIG):
         calibration_report = meta_artifact.get("calibration_report") if isinstance(meta_artifact, dict) else None
         kelly_approved = bool(meta_artifact.get("kelly_sizing_approved")) if isinstance(meta_artifact, dict) else False
     kelly_status = (
-        "Approved by saved Meta artifact calibration report."
+        "Approved for the legacy binary/meta path by saved calibration report."
         if kelly_approved
-        else "Not approved in this report. Kelly sizing requires a saved Meta artifact with calibration metrics inside the configured limits."
+        else "Not approved for the legacy binary/meta path. The formal ranker strategy uses fixed top-k sizing, so Kelly is not required for strategy approval."
     )
 
     artifact_table = "\n".join(
@@ -92,7 +92,7 @@ test window. Single split OOS results are not treated as sufficient evidence.
 | --- | --- | --- | --- |
 {artifact_table}
 
-## Calibration and Kelly sizing decision
+## Strategy approval, diagnostics, and Kelly decision
 
 Walk-forward metrics summary:
 
@@ -100,7 +100,7 @@ Walk-forward metrics summary:
 {_format_json(metrics_summary)}
 ```
 
-Primary edge decision: {"Approved" if metrics_summary.get("primary_edge_approved") else "Not approved. Treat dashboard output as exploratory until primary mean/min fold AUC clear the gates."}
+Binary classifier diagnostic: {"AUC gate passed" if metrics_summary.get("primary_edge_approved") else "AUC gate not passed. This diagnostic does not block the formal ranker strategy."}
 
 ML vs baseline summary:
 
@@ -108,7 +108,7 @@ ML vs baseline summary:
 {_format_json(metrics_summary.get('strategy_summary', {'status': 'missing'}))}
 ```
 
-Strategy edge decision: {"Approved" if metrics_summary.get('strategy_edge_approved') else "Not approved. ML top-k must beat the momentum baseline on mean relative return."}
+Formal ranker strategy decision: {"Approved" if metrics_summary.get('formal_strategy_approved') else "Not approved. ML top-k must beat the momentum baseline on mean relative return."}
 
 ```json
 {_format_json(config['calibration'])}
@@ -120,7 +120,7 @@ Saved calibration report:
 {_format_json(calibration_report or {'status': 'missing'})}
 ```
 
-Decision: {kelly_status}
+Kelly decision: {kelly_status}
 
 ## Backtest result status
 

@@ -335,4 +335,5 @@ def research_quality_status(config=RESEARCH_CONFIG, root=PROJECT_ROOT):
         "required_min_fold_auc": gates["min_primary_fold_auc"],
         "strategy_summary": strategy_summary,
         "strategy_edge_approved": bool(strategy_summary.get("ml_vs_momentum_approved", False)),
+        "formal_strategy_approved": bool(strategy_summary.get("ml_vs_momentum_approved", False)),
     }

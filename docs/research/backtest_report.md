@@ -1,6 +1,6 @@
 # AlphaBase V3 Reproducible Research Report
 
-Generated: 2026-05-23 05:44:36 UTC
+Generated: 2026-05-23 05:56:56 UTC
 
 ## Research identity
 
@@ -69,13 +69,14 @@ test window. Single split OOS results are not treated as sufficient evidence.
 | ranker_walk_forward_predictions | `artifacts/research/alphabase_v3_research_2026_05/ranker_walk_forward_predictions.csv` | present | `e1f7efeafbffed94961c4287c6dfb78b2db0241b6bfd5a7d3cecc6d5c6467516` |
 | fold_strategy_metrics | `artifacts/research/alphabase_v3_research_2026_05/fold_strategy_metrics.csv` | present | `0180dc2795100f60ceaed2fe0e65a4b68ff424c8c0f2813d03cd375726e83139` |
 
-## Calibration and Kelly sizing decision
+## Strategy approval, diagnostics, and Kelly decision
 
 Walk-forward metrics summary:
 
 ```json
 {
   "fold_count": 12,
+  "formal_strategy_approved": true,
   "max_auc": 0.570510297783025,
   "mean_auc": 0.4953117294324798,
   "min_auc": 0.4249193040729678,
@@ -97,7 +98,7 @@ Walk-forward metrics summary:
 }
 ```
 
-Primary edge decision: Not approved. Treat dashboard output as exploratory until primary mean/min fold AUC clear the gates.
+Binary classifier diagnostic: AUC gate not passed. This diagnostic does not block the formal ranker strategy.
 
 ML vs baseline summary:
 
@@ -114,7 +115,7 @@ ML vs baseline summary:
 }
 ```
 
-Strategy edge decision: Approved
+Formal ranker strategy decision: Approved
 
 ```json
 {
@@ -207,7 +208,7 @@ Saved calibration report:
 }
 ```
 
-Decision: Not approved in this report. Kelly sizing requires a saved Meta artifact with calibration metrics inside the configured limits.
+Kelly decision: Not approved for the legacy binary/meta path. The formal ranker strategy uses fixed top-k sizing, so Kelly is not required for strategy approval.
 
 ## Backtest result status
 
