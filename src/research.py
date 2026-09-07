@@ -180,6 +180,7 @@ def add_forward_returns(df, horizon_days, benchmark_symbol=None):
     data = data.sort_values(["symbol", "time"]).copy()
     if "return_20" not in data.columns:
         data["return_20"] = data.groupby("symbol")["close"].pct_change(20)
+    data["forward_time"] = data.groupby("symbol")["time"].shift(-horizon_days)
     data["forward_close"] = data.groupby("symbol")["close"].shift(-horizon_days)
     data["forward_return"] = (data["forward_close"] / data["close"]) - 1.0
     if benchmark_symbol and benchmark_symbol in set(data["symbol"]):
@@ -192,6 +193,30 @@ def add_forward_returns(df, horizon_days, benchmark_symbol=None):
         data["benchmark_forward_return"] = np.nan
         data["relative_forward_return"] = data["forward_return"]
     return data
+
+
+def labels_end_before(label_end_times, boundary):
+    """Return a mask for labels fully observed before a validation boundary."""
+    return pd.DatetimeIndex(pd.to_datetime(label_end_times)) < pd.Timestamp(boundary)
+
+
+def build_purged_ranker_masks(dates, label_end_times, fold, validation_start):
+    """Build ranker masks without allowing forward-return labels across boundaries."""
+    dates = pd.DatetimeIndex(pd.to_datetime(dates))
+    validation_start = pd.Timestamp(validation_start)
+    test_start = pd.Timestamp(fold["test_start"])
+
+    train_window = (dates >= pd.Timestamp(fold["train_start"])) & (dates <= pd.Timestamp(fold["train_end"]))
+    test = (dates >= test_start) & (dates <= pd.Timestamp(fold["test_end"]))
+    fit = train_window & (dates < validation_start) & labels_end_before(label_end_times, validation_start)
+    validation = train_window & (dates >= validation_start) & labels_end_before(label_end_times, test_start)
+    final_train = train_window & labels_end_before(label_end_times, test_start)
+    return {
+        "fit": fit,
+        "validation": validation,
+        "final_train": final_train,
+        "test": test,
+    }
 
 
 def evaluate_topk_strategies(predictions, returns_df, folds, top_k=3, score_column="primary_prob"):
@@ -284,7 +309,7 @@ def apply_hybrid_score(df, alpha):
 
 def summarize_strategy_metrics(strategy_metrics):
     if strategy_metrics is None or strategy_metrics.empty:
-        return {"status": "missing", "ml_vs_momentum_approved": False}
+        return {"status": "missing", "candidate_gate_passed": False}
     pivot = strategy_metrics.pivot_table(
         index="fold",
         columns="strategy",
@@ -292,17 +317,23 @@ def summarize_strategy_metrics(strategy_metrics):
         aggfunc="mean",
     )
     if "ml_topk" not in pivot or "momentum_topk" not in pivot:
-        return {"status": "missing", "ml_vs_momentum_approved": False}
+        return {"status": "missing", "candidate_gate_passed": False}
     spread = pivot["ml_topk"] - pivot["momentum_topk"]
+    valid_spread = spread.dropna()
+    winning_folds = int((valid_spread > 0).sum())
     return {
         "status": "present",
-        "fold_count": int(spread.dropna().shape[0]),
+        "fold_count": int(valid_spread.shape[0]),
         "ml_mean_relative_return": float(pivot["ml_topk"].mean()),
         "momentum_mean_relative_return": float(pivot["momentum_topk"].mean()),
         "equal_weight_mean_relative_return": float(pivot.get("equal_weight", pd.Series(dtype=float)).mean()),
-        "ml_minus_momentum": float(spread.mean()),
-        "ml_beats_momentum_folds": int((spread > 0).sum()),
-        "ml_vs_momentum_approved": bool(spread.mean() > 0 and (spread > 0).sum() >= max(1, len(spread.dropna()) // 2)),
+        "ml_minus_momentum": float(valid_spread.mean()),
+        "ml_beats_momentum_folds": winning_folds,
+        "candidate_gate_passed": bool(
+            not valid_spread.empty
+            and valid_spread.mean() > 0
+            and winning_folds > len(valid_spread) / 2
+        ),
     }
 
 
@@ -321,7 +352,7 @@ def research_quality_status(config=RESEARCH_CONFIG, root=PROJECT_ROOT):
     strategy_summary = (
         summarize_strategy_metrics(pd.read_csv(strategy_path))
         if strategy_path and strategy_path.exists()
-        else {"status": "missing", "ml_vs_momentum_approved": False}
+        else {"status": "missing", "candidate_gate_passed": False}
     )
     primary_edge_approved = bool(approved)
     return {
@@ -334,6 +365,5 @@ def research_quality_status(config=RESEARCH_CONFIG, root=PROJECT_ROOT):
         "required_mean_auc": gates["min_primary_mean_auc"],
         "required_min_fold_auc": gates["min_primary_fold_auc"],
         "strategy_summary": strategy_summary,
-        "strategy_edge_approved": bool(strategy_summary.get("ml_vs_momentum_approved", False)),
-        "formal_strategy_approved": bool(strategy_summary.get("ml_vs_momentum_approved", False)),
+        "strategy_candidate_gate_passed": bool(strategy_summary.get("candidate_gate_passed", False)),
     }

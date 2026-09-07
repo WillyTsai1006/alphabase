@@ -1,10 +1,10 @@
 # AlphaBase V3 Reproducible Research Report
 
-Generated: 2026-05-23 05:56:56 UTC
+Generated: 2026-09-06 17:52:04 UTC
 
 ## Research identity
 
-- Research ID: `alphabase_v3_research_2026_05`
+- Research ID: `alphabase_v3_research_2026_09_purged`
 - Fixed data interval: `2016-01-01` to `2025-12-31`
 - Walk-forward interval: `2020-01-01` to `2025-12-31`
 - Feature set: `rsi_14, bollinger_upper, bollinger_lower, log_return, ma_20, volatility`
@@ -55,67 +55,73 @@ Fixed universe:
 
 Each fold trains only on data before the test window, applies an embargo equal to
 `horizon_days`, and records out-of-sample predictions for the following fixed
-test window. Single split OOS results are not treated as sufficient evidence.
+test window. Ranker fit rows are retained only when their forward-return label
+ends before validation starts; final training and validation rows are retained
+only when their labels end before the test window starts. Single split OOS
+results are not treated as sufficient evidence.
 
 ## Research artifacts
 
 | Artifact | Path | Status | SHA256 |
 | --- | --- | --- | --- |
-| primary_model | `artifacts/research/alphabase_v3_research_2026_05/primary_lgbm.pkl` | present | `72c088730a5bf8f4c4275980921039d7b22fa80024fe84d46aa5162538f65b7e` |
-| meta_model | `artifacts/research/alphabase_v3_research_2026_05/meta_lgbm.pkl` | present | `f3d7cf2b5807bf5b1110408e00d330a7d8ea13ac2e999d9343bdca783d273104` |
-| hmm_model | `artifacts/research/alphabase_v3_research_2026_05/hmm_model.pkl` | present | `9c49516cdac642fc3c5a258a6f3697cb8a05bfb88f3f584952e17d63b45d6ade` |
-| primary_walk_forward_metrics | `artifacts/research/alphabase_v3_research_2026_05/primary_walk_forward_metrics.csv` | present | `e4772e6ad99221377a6ca6ac023f868379cf9ee8b0f4fe4a75e5ebb05e8697ae` |
-| primary_walk_forward_predictions | `artifacts/research/alphabase_v3_research_2026_05/primary_walk_forward_predictions.csv` | present | `39c2131a082a407a0668a0e7cd368d3adffc4c05d481fe2ca6cb60c25e937549` |
-| ranker_walk_forward_predictions | `artifacts/research/alphabase_v3_research_2026_05/ranker_walk_forward_predictions.csv` | present | `e1f7efeafbffed94961c4287c6dfb78b2db0241b6bfd5a7d3cecc6d5c6467516` |
-| fold_strategy_metrics | `artifacts/research/alphabase_v3_research_2026_05/fold_strategy_metrics.csv` | present | `0180dc2795100f60ceaed2fe0e65a4b68ff424c8c0f2813d03cd375726e83139` |
+| primary_model | `artifacts/research/alphabase_v3_research_2026_09_purged/primary_lgbm.pkl` | present | `1c245e682d5503da1746394a2db21b1a3742d6317d2670000b6520a4e494cc93` |
+| meta_model | `artifacts/research/alphabase_v3_research_2026_09_purged/meta_lgbm.pkl` | present | `1f3423ac57c4f4f246c96547347f327f1418cd4f77d6b0681067d56f72fe6c9b` |
+| hmm_model | `artifacts/research/alphabase_v3_research_2026_09_purged/hmm_model.pkl` | present | `c608fcc30512dbcc6617d962edeaaaa6ed7545d44fe8b126f538f17dde62c839` |
+| primary_walk_forward_metrics | `artifacts/research/alphabase_v3_research_2026_09_purged/primary_walk_forward_metrics.csv` | present | `3bd8f4cf3263fea5ca66f56a5e3219db08c84642287b344d43f9bae82bd57ea2` |
+| primary_walk_forward_predictions | `artifacts/research/alphabase_v3_research_2026_09_purged/primary_walk_forward_predictions.csv` | present | `a2bf27d8aaa70db0d50061f5a339e015a67b77c534f2245aa4ef1a6e62d9a873` |
+| ranker_walk_forward_predictions | `artifacts/research/alphabase_v3_research_2026_09_purged/ranker_walk_forward_predictions.csv` | present | `9276ff2e6df66b3a8ca9e4e611cbd296bd50574a4cb6009bcbd15076b3ec3a2f` |
+| fold_strategy_metrics | `artifacts/research/alphabase_v3_research_2026_09_purged/fold_strategy_metrics.csv` | present | `3d91448e7fcdc0476c16d0237baad835dd3817ecb80e64bf3c361093179115e3` |
 
-## Strategy approval, diagnostics, and Kelly decision
+## Research gates, diagnostics, and Kelly decision
 
 Walk-forward metrics summary:
 
 ```json
 {
   "fold_count": 12,
-  "formal_strategy_approved": true,
-  "max_auc": 0.570510297783025,
-  "mean_auc": 0.4953117294324798,
-  "min_auc": 0.4249193040729678,
+  "max_auc": 0.5727516350892974,
+  "mean_auc": 0.4972807562381358,
+  "min_auc": 0.425963998232056,
   "primary_edge_approved": false,
   "required_mean_auc": 0.55,
   "required_min_fold_auc": 0.5,
   "status": "present",
-  "strategy_edge_approved": true,
+  "strategy_candidate_gate_passed": false,
   "strategy_summary": {
-    "equal_weight_mean_relative_return": 0.0033059570022440908,
+    "candidate_gate_passed": false,
+    "equal_weight_mean_relative_return": 0.003303174651380325,
     "fold_count": 12,
     "ml_beats_momentum_folds": 8,
-    "ml_mean_relative_return": 0.008809376170524142,
-    "ml_minus_momentum": 0.0012978504196869162,
-    "ml_vs_momentum_approved": true,
-    "momentum_mean_relative_return": 0.007511525750837225,
+    "ml_mean_relative_return": 0.006687041651611783,
+    "ml_minus_momentum": -0.0008239756182131328,
+    "momentum_mean_relative_return": 0.007511017269824917,
     "status": "present"
   }
 }
 ```
 
-Binary classifier diagnostic: AUC gate not passed. This diagnostic does not block the formal ranker strategy.
+Binary classifier diagnostic: AUC gate not passed.
 
 ML vs baseline summary:
 
 ```json
 {
-  "equal_weight_mean_relative_return": 0.0033059570022440908,
+  "candidate_gate_passed": false,
+  "equal_weight_mean_relative_return": 0.003303174651380325,
   "fold_count": 12,
   "ml_beats_momentum_folds": 8,
-  "ml_mean_relative_return": 0.008809376170524142,
-  "ml_minus_momentum": 0.0012978504196869162,
-  "ml_vs_momentum_approved": true,
-  "momentum_mean_relative_return": 0.007511525750837225,
+  "ml_mean_relative_return": 0.006687041651611783,
+  "ml_minus_momentum": -0.0008239756182131328,
+  "momentum_mean_relative_return": 0.007511017269824917,
   "status": "present"
 }
 ```
 
-Formal ranker strategy decision: Approved
+Ranker candidate gate: Not passed.
+
+This is an internal ranking diagnostic, not a deployable-strategy approval. It
+uses overlapping forward-return observations and does not model concurrent
+positions, capital constraints, portfolio turnover, or transaction costs.
 
 ```json
 {
@@ -145,25 +151,25 @@ Saved calibration report:
       "mean_prob": null
     },
     {
-      "abs_error": null,
+      "abs_error": 0.2380945621732935,
       "bin": 2,
-      "count": 0,
-      "empirical_rate": null,
-      "mean_prob": null
+      "count": 49,
+      "empirical_rate": 0.5306122448979592,
+      "mean_prob": 0.2925176827246657
     },
     {
-      "abs_error": 0.06456105120329797,
+      "abs_error": 0.06521919670733306,
       "bin": 3,
-      "count": 828,
-      "empirical_rate": 0.40217391304347827,
-      "mean_prob": 0.3376128618401803
+      "count": 793,
+      "empirical_rate": 0.39722572509457754,
+      "mean_prob": 0.3320065283872445
     },
     {
-      "abs_error": null,
+      "abs_error": 0.4060590552887142,
       "bin": 4,
-      "count": 0,
-      "empirical_rate": null,
-      "mean_prob": null
+      "count": 3,
+      "empirical_rate": 0.0,
+      "mean_prob": 0.4060590552887142
     },
     {
       "abs_error": null,
@@ -201,14 +207,14 @@ Saved calibration report:
       "mean_prob": null
     }
   ],
-  "brier_score": 0.24436715028252215,
-  "expected_calibration_error": 0.06456105120329797,
-  "max_calibration_error": 0.06456105120329797,
-  "sample_count": 828
+  "brier_score": 0.24710399401668637,
+  "expected_calibration_error": 0.07645400438020432,
+  "max_calibration_error": 0.4060590552887142,
+  "sample_count": 845
 }
 ```
 
-Kelly decision: Not approved for the legacy binary/meta path. The formal ranker strategy uses fixed top-k sizing, so Kelly is not required for strategy approval.
+Kelly decision: Not approved for the legacy binary/meta path. The ranker diagnostic uses fixed top-k selections and does not establish approval for live position sizing.
 
 ## Backtest result status
 

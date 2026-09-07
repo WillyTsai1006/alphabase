@@ -11,7 +11,13 @@ sys.path.insert(0, str(SRC))
 
 from config import BENCHMARK_SYMBOL, FEATURES, RESEARCH_CONFIG, TARGET_SYMBOLS  # noqa: E402
 from quant_engine import DataAndLabelEngine, ModelTrainer  # noqa: E402
-from research import add_forward_returns, apply_hybrid_score, evaluate_topk_strategies, select_hybrid_alpha  # noqa: E402
+from research import (  # noqa: E402
+    add_forward_returns,
+    apply_hybrid_score,
+    build_purged_ranker_masks,
+    evaluate_topk_strategies,
+    select_hybrid_alpha,
+)
 
 
 FIXED_LGBM_PARAMS = {
@@ -47,23 +53,26 @@ def build_ranker_predictions(feature_df, returns_df, folds, top_k=3):
     data["return_10"] = data.groupby("symbol")["close"].pct_change(10)
     data["volatility_ranker_20"] = data.groupby("symbol")["log_return"].rolling(20).std().reset_index(level=0, drop=True)
     ranker_features = FEATURES + ["return_5", "return_10", "return_20", "volatility_ranker_20"]
-    data = data.dropna(subset=ranker_features + ["relative_forward_return"])
+    data = data.dropna(subset=ranker_features + ["relative_forward_return", "forward_time"])
     data = data.set_index(["time", "symbol"], drop=False)
     X = data[ranker_features]
     y = data["relative_forward_return"]
     dates = X.index.get_level_values("time")
+    label_end_times = data["forward_time"]
     rows = []
 
     for _, fold in folds.iterrows():
         train_mask = (dates >= fold["train_start"]) & (dates <= fold["train_end"])
-        test_mask = (dates >= fold["test_start"]) & (dates <= fold["test_end"])
         train_dates = dates[train_mask].unique().sort_values()
-        if len(train_dates) < 5 or train_mask.sum() == 0 or test_mask.sum() == 0:
+        if len(train_dates) < 5 or train_mask.sum() == 0:
             continue
         validation_start = train_dates[int(len(train_dates) * 0.80)]
-        fit_mask = train_mask & (dates < validation_start)
-        validation_mask = train_mask & (dates >= validation_start)
-        if fit_mask.sum() == 0 or validation_mask.sum() == 0:
+        masks = build_purged_ranker_masks(dates, label_end_times, fold, validation_start)
+        fit_mask = masks["fit"]
+        validation_mask = masks["validation"]
+        final_train_mask = masks["final_train"]
+        test_mask = masks["test"]
+        if fit_mask.sum() == 0 or validation_mask.sum() == 0 or final_train_mask.sum() == 0 or test_mask.sum() == 0:
             continue
 
         validation_model = lgb.train(
@@ -79,7 +88,7 @@ def build_ranker_predictions(feature_df, returns_df, folds, top_k=3):
 
         model = lgb.train(
             RANKER_PARAMS,
-            lgb.Dataset(X[train_mask], label=y[train_mask]),
+            lgb.Dataset(X[final_train_mask], label=y[final_train_mask]),
             num_boost_round=200,
         )
         test_df = data.loc[X[test_mask].index][["time", "symbol", "return_20"]].copy()

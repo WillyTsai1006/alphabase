@@ -10,7 +10,7 @@ from sqlalchemy import text, bindparam
 # 導入共用配置與工具
 from config import TARGET_SYMBOLS, FEATURES, MODEL_PATHS, LABEL_PARAMS, RESEARCH_CONFIG
 from utils import get_logger, db_manager
-from research import build_walk_forward_splits, clean_market_data
+from research import build_walk_forward_splits, clean_market_data, labels_end_before
 
 warnings.filterwarnings('ignore')
 np.random.seed(42)
@@ -98,7 +98,9 @@ class ModelTrainer:
     def train(self, best_params):
         logger.info("🚀 訓練最終模型 (OOS Split)...")
         split = self.X.index.get_level_values('time').max() - pd.Timedelta(days=180)
-        tr, ts = self.X.index.get_level_values('time') < split, self.X.index.get_level_values('time') >= split
+        dates = self.X.index.get_level_values('time')
+        tr = (dates < split) & labels_end_before(self.exits, split)
+        ts = dates >= split
         m = lgb.train(best_params, lgb.Dataset(self.X[tr], label=self.y[tr]), num_boost_round=500)
         logger.info(f"✅ OOS AUC: {roc_auc_score(self.y[ts], m.predict(self.X[ts])):.4f}")
         joblib.dump(m, MODEL_PATHS['lgbm'])
@@ -147,6 +149,6 @@ if __name__ == "__main__":
     df_lab = DataAndLabelEngine.create_labels(df)
     trainer = ModelTrainer(df_lab, FEATURES)
     logger.info("🤖 開始 Optuna 優化...")
-    study = optuna.create_study(direction='maximize')
+    study = optuna.create_study(direction='maximize', sampler=optuna.samplers.TPESampler(seed=42))
     study.optimize(trainer.objective, n_trials=30)
     trainer.train(study.best_params)

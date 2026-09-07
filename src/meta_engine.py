@@ -10,7 +10,7 @@ from pathlib import Path
 from config import TARGET_SYMBOLS, FEATURES, MODEL_PATHS, BACKTEST_PARAMS, RESEARCH_CONFIG
 from utils import get_logger
 from quant_engine import DataAndLabelEngine
-from research import compute_calibration_report, is_kelly_sizing_approved, load_primary_oos_predictions
+from research import compute_calibration_report, is_kelly_sizing_approved, labels_end_before, load_primary_oos_predictions
 warnings.filterwarnings('ignore')
 logger = get_logger("MetaEngine")
 
@@ -71,7 +71,7 @@ class MetaLabelingEngine:
     """元標註 (Meta-Labeling) 訓練引擎"""
     def __init__(self):
         # 載入主模型 (Primary Model)
-        self.primary_model = joblib.load(MODEL_PATHS['lgbm'])
+        self.primary_model = joblib.load(RESEARCH_CONFIG['artifact_paths']['primary_model'])
         self.base_threshold = BACKTEST_PARAMS['threshold'] # 預設買入信心門檻 (0.55)
 
     def generate_meta_labels(self, df, primary_predictions=None, require_oos_predictions=True):
@@ -127,9 +127,14 @@ class MetaLabelingEngine:
             raise ValueError("Meta-Model 事件日期不足，無法建立訓練/調校/評估切分。")
         tune_start = event_dates[int(len(event_dates) * 0.60)]
         eval_start = event_dates[int(len(event_dates) * 0.80)]
-        tr_mask = X.index.get_level_values('time') < tune_start
-        tune_mask = (X.index.get_level_values('time') >= tune_start) & (X.index.get_level_values('time') < eval_start)
-        eval_mask = X.index.get_level_values('time') >= eval_start
+        dates = X.index.get_level_values('time')
+        tr_mask = (dates < tune_start) & labels_end_before(events['exit_time'], tune_start)
+        tune_mask = (
+            (dates >= tune_start)
+            & (dates < eval_start)
+            & labels_end_before(events['exit_time'], eval_start)
+        )
+        eval_mask = dates >= eval_start
         X_train, y_train = X[tr_mask], y[tr_mask]
         X_tune, y_tune = X[tune_mask], y[tune_mask]
         X_eval, y_eval = X[eval_mask], y[eval_mask]

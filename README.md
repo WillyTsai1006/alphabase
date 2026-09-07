@@ -1,17 +1,17 @@
-# 📈 AlphaBase V3.0: Dual-AI Institutional Quant System
+# 📈 AlphaBase V3.0: Walk-Forward Quant Research Prototype
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
 ![TimescaleDB](https://img.shields.io/badge/TimescaleDB-pg14-blue.svg)
-![Dual-AI](https://img.shields.io/badge/Machine_Learning-Dual_LightGBM-green.svg)
+![Machine Learning](https://img.shields.io/badge/Machine_Learning-LightGBM-green.svg)
 ![Risk](https://img.shields.io/badge/Risk_Management-HMM_%2B_Kelly-red.svg)
 ![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-orange.svg)
 ![Optuna](https://img.shields.io/badge/Optimization-Optuna-orange.svg)
 
-AlphaBase is an event-driven quantitative research prototype. Version 3.0 uses a **Primary + Meta-Model** workflow, HMM market-state filtering, and calibration-gated position sizing.
+AlphaBase is an event-driven quantitative research prototype. Version 3.0 experiments with a **Primary + Meta-Model** workflow, HMM market-state filtering, and calibration-gated position sizing. These components are research paths, not evidence of a production-ready trading system.
 
-## ✨ System Architecture (V3.0 終極架構)
+## ✨ Research Architecture
 
-The system is built upon four professional-grade pillars:
+The repository contains four experimental components:
 
 1. **Data Pipeline (PostgreSQL)**
    - **Push-down Computing**: Calculates RSI, Bollinger Bands, moving averages, and returns directly in SQL window functions.
@@ -31,11 +31,16 @@ The system is built upon four professional-grade pillars:
 
 ## 📊 Reproducible Research Status
 
+The current purged-label report shows that the binary AUC gate did not pass. The ranker beat momentum in 8 of 12 folds, but its mean relative return was lower than momentum, so the internal candidate gate also did not pass. The previously saved Meta-model calibration did not pass its Kelly-sizing limits; the Meta artifact has not yet been rebuilt under the current research ID.
+
+The top-k comparison remains a ranking diagnostic: it uses overlapping forward returns and is not a capital-aware portfolio backtest.
+
 Performance claims are intentionally not hard-coded in this README. Publish return, win-rate, and drawdown only from the fixed research protocol:
 
 - Fixed data interval: `2016-01-01` to `2025-12-31`
 - Fixed universe: `AAPL, MSFT, NVDA, GOOGL, AMZN, SPY, INTC, PYPL, PFE, ZM`
-- Fixed artifacts: `artifacts/research/alphabase_v3_research_2026_05/`
+- Current artifacts: `artifacts/research/alphabase_v3_research_2026_09_purged/`
+- Superseded pre-purge artifacts: `artifacts/research/alphabase_v3_research_2026_05/`
 - Required validation: walk-forward / rolling retrain folds plus Meta calibration report
 - Report path: `docs/research/backtest_report.md`
 

@@ -61,3 +61,28 @@ def test_walk_forward_train_purges_exit_times(monkeypatch):
 
     assert metrics.iloc[0]["train_rows"] == 1
     assert len(predictions) == 2
+
+
+def test_final_primary_holdout_purges_cross_boundary_labels(monkeypatch):
+    dates = pd.date_range("2024-01-01", periods=400, freq="D")
+    index = pd.MultiIndex.from_product([dates, ["AAPL"]], names=["time", "symbol"])
+    df = pd.DataFrame(index=index)
+    for feature in FEATURES:
+        df[feature] = 1.0
+    df["target"] = [i % 2 for i in range(len(df))]
+    df["exit_time"] = dates
+    split = dates[-1] - pd.Timedelta(days=180)
+    df.loc[(split - pd.Timedelta(days=1), "AAPL"), "exit_time"] = split
+    trainer = ModelTrainer(df, FEATURES)
+    trained_rows = {}
+
+    def train_model(params, dataset, **kwargs):
+        trained_rows["count"] = len(dataset.data)
+        return FakeModel()
+
+    monkeypatch.setattr(quant_engine.lgb, "train", train_model)
+    monkeypatch.setattr(quant_engine.joblib, "dump", lambda *args, **kwargs: None)
+
+    trainer.train({"objective": "binary"})
+
+    assert trained_rows["count"] == int((dates < split).sum()) - 1

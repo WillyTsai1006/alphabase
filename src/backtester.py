@@ -4,7 +4,7 @@ import warnings
 import joblib
 from sqlalchemy import text
 # 導入共用配置與工具
-from config import BACKTEST_PARAMS, BENCHMARK_SYMBOL, MODEL_PATHS, FEATURES
+from config import BACKTEST_PARAMS, BENCHMARK_SYMBOL, FEATURES, RESEARCH_CONFIG
 from utils import get_logger, db_manager
 warnings.filterwarnings('ignore')
 logger = get_logger("Backtester_V3")
@@ -195,11 +195,11 @@ if __name__ == "__main__":
     df = DataAndLabelEngine.load_data(TARGET_SYMBOLS)
     df['volatility'] = df.groupby(level='symbol')['close'].pct_change().ewm(span=100).std()
     df = df.dropna().reset_index()
-    lgbm_model = joblib.load(MODEL_PATHS['lgbm'])
+    lgbm_model = joblib.load(RESEARCH_CONFIG['artifact_paths']['primary_model'])
     from meta_engine import load_meta_artifact
     from research import load_primary_oos_predictions
-    meta_artifact = load_meta_artifact(MODEL_PATHS['meta'])
-    hmm_data = joblib.load(MODEL_PATHS['hmm'])
+    meta_artifact = load_meta_artifact(RESEARCH_CONFIG['artifact_paths']['meta_model'])
+    hmm_data = joblib.load(RESEARCH_CONFIG['artifact_paths']['hmm_model'])
     primary_predictions = load_primary_oos_predictions()
     bt = InstitutionalBacktester(
         df,

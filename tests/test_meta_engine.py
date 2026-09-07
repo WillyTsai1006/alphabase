@@ -58,8 +58,19 @@ def test_train_meta_model_separates_threshold_and_calibration(monkeypatch):
     events = make_meta_frame()
     events["primary_prob"] = 0.8
     events["meta_target"] = events["target"]
+    dates = events.index.get_level_values("time").unique().sort_values()
+    tune_start = dates[int(len(dates) * 0.60)]
+    eval_start = dates[int(len(dates) * 0.80)]
+    events.loc[(dates[int(len(dates) * 0.60) - 1], "AAPL"), "exit_time"] = tune_start
+    events.loc[(dates[int(len(dates) * 0.80) - 1], "AAPL"), "exit_time"] = eval_start
     engine = MetaLabelingEngine.__new__(MetaLabelingEngine)
-    monkeypatch.setattr(meta_engine.lgb, "train", lambda *args, **kwargs: FakeMetaModel())
+    trained_rows = {}
+
+    def train_model(params, dataset, **kwargs):
+        trained_rows["count"] = len(dataset.data)
+        return FakeMetaModel()
+
+    monkeypatch.setattr(meta_engine.lgb, "train", train_model)
     saved = {}
     monkeypatch.setattr(
         meta_engine,
@@ -74,5 +85,6 @@ def test_train_meta_model_separates_threshold_and_calibration(monkeypatch):
     _, threshold, calibration = engine.train_meta_model(events)
 
     assert 0 <= threshold <= 1
+    assert trained_rows["count"] == int(len(dates) * 0.60) - 1
     assert calibration["sample_count"] > 0
     assert saved["calibration_report"] == calibration

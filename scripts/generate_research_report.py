@@ -40,7 +40,7 @@ def render_report(config=RESEARCH_CONFIG):
     kelly_status = (
         "Approved for the legacy binary/meta path by saved calibration report."
         if kelly_approved
-        else "Not approved for the legacy binary/meta path. The formal ranker strategy uses fixed top-k sizing, so Kelly is not required for strategy approval."
+        else "Not approved for the legacy binary/meta path. The ranker diagnostic uses fixed top-k selections and does not establish approval for live position sizing."
     )
 
     artifact_table = "\n".join(
@@ -84,7 +84,10 @@ Fixed universe:
 
 Each fold trains only on data before the test window, applies an embargo equal to
 `horizon_days`, and records out-of-sample predictions for the following fixed
-test window. Single split OOS results are not treated as sufficient evidence.
+test window. Ranker fit rows are retained only when their forward-return label
+ends before validation starts; final training and validation rows are retained
+only when their labels end before the test window starts. Single split OOS
+results are not treated as sufficient evidence.
 
 ## Research artifacts
 
@@ -92,7 +95,7 @@ test window. Single split OOS results are not treated as sufficient evidence.
 | --- | --- | --- | --- |
 {artifact_table}
 
-## Strategy approval, diagnostics, and Kelly decision
+## Research gates, diagnostics, and Kelly decision
 
 Walk-forward metrics summary:
 
@@ -100,7 +103,7 @@ Walk-forward metrics summary:
 {_format_json(metrics_summary)}
 ```
 
-Binary classifier diagnostic: {"AUC gate passed" if metrics_summary.get("primary_edge_approved") else "AUC gate not passed. This diagnostic does not block the formal ranker strategy."}
+Binary classifier diagnostic: {"AUC gate passed" if metrics_summary.get("primary_edge_approved") else "AUC gate not passed."}
 
 ML vs baseline summary:
 
@@ -108,7 +111,11 @@ ML vs baseline summary:
 {_format_json(metrics_summary.get('strategy_summary', {'status': 'missing'}))}
 ```
 
-Formal ranker strategy decision: {"Approved" if metrics_summary.get('formal_strategy_approved') else "Not approved. ML top-k must beat the momentum baseline on mean relative return."}
+Ranker candidate gate: {"Passed" if metrics_summary.get('strategy_candidate_gate_passed') else "Not passed"}.
+
+This is an internal ranking diagnostic, not a deployable-strategy approval. It
+uses overlapping forward-return observations and does not model concurrent
+positions, capital constraints, portfolio turnover, or transaction costs.
 
 ```json
 {_format_json(config['calibration'])}

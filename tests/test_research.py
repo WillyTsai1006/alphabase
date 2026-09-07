@@ -2,6 +2,7 @@ import pandas as pd
 
 from research import (
     add_forward_returns,
+    build_purged_ranker_masks,
     build_walk_forward_splits,
     clean_market_data,
     compute_calibration_report,
@@ -119,7 +120,7 @@ def test_strategy_evaluation_compares_ml_to_momentum():
     summary = summarize_strategy_metrics(metrics)
 
     assert set(metrics["strategy"]) == {"ml_topk", "momentum_topk", "equal_weight"}
-    assert summary["ml_vs_momentum_approved"] is False
+    assert summary["candidate_gate_passed"] is False
     assert summary["fold_count"] == 1
 
 
@@ -141,6 +142,34 @@ def test_add_forward_returns_adds_relative_returns():
 
     assert round(aapl["forward_return"], 2) == 0.10
     assert round(aapl["relative_forward_return"], 2) == 0.05
+    assert aapl["forward_time"] == pd.Timestamp("2024-01-02")
+
+
+def test_ranker_masks_purge_labels_that_reach_future_boundaries():
+    dates = pd.to_datetime(["2024-01-01", "2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05"])
+    label_end_times = pd.to_datetime(["2024-01-02", "2024-01-04", "2024-01-04", "2024-01-06", "2024-01-08"])
+    fold = {
+        "train_start": pd.Timestamp("2024-01-01"),
+        "train_end": pd.Timestamp("2024-01-04"),
+        "test_start": pd.Timestamp("2024-01-05"),
+        "test_end": pd.Timestamp("2024-01-05"),
+    }
+
+    masks = build_purged_ranker_masks(
+        dates,
+        label_end_times,
+        fold,
+        validation_start=pd.Timestamp("2024-01-03"),
+    )
+
+    assert dates[masks["fit"]].tolist() == [pd.Timestamp("2024-01-01")]
+    assert dates[masks["validation"]].tolist() == [pd.Timestamp("2024-01-03")]
+    assert dates[masks["final_train"]].tolist() == [
+        pd.Timestamp("2024-01-01"),
+        pd.Timestamp("2024-01-02"),
+        pd.Timestamp("2024-01-03"),
+    ]
+    assert dates[masks["test"]].tolist() == [pd.Timestamp("2024-01-05")]
 
 
 def test_hybrid_score_selects_ranker_when_validation_improves():
@@ -189,5 +218,20 @@ def test_research_quality_uses_strategy_gate(tmp_path):
     status = research_quality_status(config=config, root=tmp_path)
 
     assert status["primary_edge_approved"] is False
-    assert status["strategy_edge_approved"] is True
-    assert status["formal_strategy_approved"] is True
+    assert status["strategy_candidate_gate_passed"] is True
+
+
+def test_strategy_candidate_gate_requires_a_strict_majority_of_folds():
+    metrics = pd.DataFrame(
+        {
+            "fold": [1, 1, 2, 2],
+            "strategy": ["ml_topk", "momentum_topk", "ml_topk", "momentum_topk"],
+            "mean_relative_return": [0.03, 0.01, 0.01, 0.02],
+        }
+    )
+
+    summary = summarize_strategy_metrics(metrics)
+
+    assert summary["ml_beats_momentum_folds"] == 1
+    assert summary["ml_minus_momentum"] > 0
+    assert summary["candidate_gate_passed"] is False

@@ -47,7 +47,7 @@ MODEL_PATHS = {
     'meta': 'alphabase_meta.pkl'
 }
 RESEARCH_CONFIG = {
-    'research_id': 'alphabase_v3_research_2026_05',
+    'research_id': 'alphabase_v3_research_2026_09_purged',
     'data_start': '2016-01-01',
     'data_end': '2025-12-31',
     'train_start': '2016-01-01',
@@ -84,13 +84,13 @@ RESEARCH_CONFIG = {
         'min_primary_fold_auc': 0.50,
     },
     'artifact_paths': {
-        'primary_model': 'artifacts/research/alphabase_v3_research_2026_05/primary_lgbm.pkl',
-        'meta_model': 'artifacts/research/alphabase_v3_research_2026_05/meta_lgbm.pkl',
-        'hmm_model': 'artifacts/research/alphabase_v3_research_2026_05/hmm_model.pkl',
-        'primary_walk_forward_metrics': 'artifacts/research/alphabase_v3_research_2026_05/primary_walk_forward_metrics.csv',
-        'primary_walk_forward_predictions': 'artifacts/research/alphabase_v3_research_2026_05/primary_walk_forward_predictions.csv',
-        'ranker_walk_forward_predictions': 'artifacts/research/alphabase_v3_research_2026_05/ranker_walk_forward_predictions.csv',
-        'fold_strategy_metrics': 'artifacts/research/alphabase_v3_research_2026_05/fold_strategy_metrics.csv',
+        'primary_model': 'artifacts/research/alphabase_v3_research_2026_09_purged/primary_lgbm.pkl',
+        'meta_model': 'artifacts/research/alphabase_v3_research_2026_09_purged/meta_lgbm.pkl',
+        'hmm_model': 'artifacts/research/alphabase_v3_research_2026_09_purged/hmm_model.pkl',
+        'primary_walk_forward_metrics': 'artifacts/research/alphabase_v3_research_2026_09_purged/primary_walk_forward_metrics.csv',
+        'primary_walk_forward_predictions': 'artifacts/research/alphabase_v3_research_2026_09_purged/primary_walk_forward_predictions.csv',
+        'ranker_walk_forward_predictions': 'artifacts/research/alphabase_v3_research_2026_09_purged/ranker_walk_forward_predictions.csv',
+        'fold_strategy_metrics': 'artifacts/research/alphabase_v3_research_2026_09_purged/fold_strategy_metrics.csv',
         'report': 'docs/research/backtest_report.md',
     },
 }
