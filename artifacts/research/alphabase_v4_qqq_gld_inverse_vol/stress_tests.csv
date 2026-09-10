@@ -1,0 +1,3 @@
+test,removed_year,strategy_cagr,strategy_sharpe,spy_cagr
+holdout_double_cost,,0.3379338212215084,3.780825384789029,
+validation_without_strongest_excess_year,2020.0,0.07762532271686418,0.69326584531189,0.0900081965878392

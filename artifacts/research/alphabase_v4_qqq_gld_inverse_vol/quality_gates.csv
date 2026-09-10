@@ -1,0 +1,6 @@
+gate,passed
+positive_holdout_cagr,True
+holdout_sharpe_above_spy,True
+daily_drawdown_below_spy,True
+cagr_at_least_80pct_of_spy,True
+positive_cagr_at_double_cost,True
