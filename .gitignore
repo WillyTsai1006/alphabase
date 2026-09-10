@@ -9,3 +9,6 @@ artifacts/*
 !artifacts/research/
 !artifacts/research/**
 artifacts/research/**/primary_lgbm_fold_*.pkl
+!artifacts/paper/
+artifacts/paper/*
+!artifacts/paper/.gitkeep
