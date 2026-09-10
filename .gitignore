@@ -3,3 +3,9 @@ __pycache__/
 data/
 *.pkl
 venv/
+.env
+.pytest_cache/
+artifacts/*
+!artifacts/research/
+!artifacts/research/**
+artifacts/research/**/primary_lgbm_fold_*.pkl

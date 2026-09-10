@@ -6,17 +6,23 @@ import plotly.graph_objects as go
 import joblib
 from sqlalchemy import text
 st.set_page_config(page_title="AlphaBase Quant V3.0", page_icon="📈", layout="wide")
-from config import MODEL_PATHS, BACKTEST_PARAMS
+from config import BACKTEST_PARAMS, RESEARCH_CONFIG
 from utils import get_logger, db_manager
 from quant_engine import DataAndLabelEngine
+from meta_engine import load_meta_artifact
 from backtester import InstitutionalBacktester
+from research import load_primary_oos_predictions, missing_required_artifacts, research_quality_status
 logger = get_logger("StreamlitApp")
 
 @st.cache_data(ttl=3600)
 def get_available_symbols():
     query = "SELECT DISTINCT symbol FROM market_data ORDER BY symbol"
-    with db_manager.engine.connect() as conn:
-        return [row[0] for row in conn.execute(text(query))]
+    try:
+        with db_manager.engine.connect() as conn:
+            return [row[0] for row in conn.execute(text(query))]
+    except Exception as exc:
+        logger.error(f"無法取得股票清單: {exc}")
+        return []
 available_symbols = get_available_symbols()
 
 @st.cache_resource(show_spinner=False)
@@ -25,16 +31,24 @@ def load_models_and_data(selected_symbols):
     df['volatility'] = df.groupby(level='symbol')['close'].pct_change().ewm(span=100).std()
     df = df.dropna().reset_index()
     # [V3.0 升級] 載入三重大腦：主模型、次模型、HMM 總經模型
-    lgbm_model = joblib.load(MODEL_PATHS['lgbm'])
-    meta_model = joblib.load(MODEL_PATHS['meta'])
-    hmm_data = joblib.load(MODEL_PATHS['hmm'])
-    return df, lgbm_model, meta_model, hmm_data
+    lgbm_model = joblib.load(RESEARCH_CONFIG['artifact_paths']['primary_model'])
+    meta_artifact = load_meta_artifact(RESEARCH_CONFIG['artifact_paths']['meta_model'])
+    hmm_data = joblib.load(RESEARCH_CONFIG['artifact_paths']['hmm_model'])
+    primary_predictions = load_primary_oos_predictions()
+    return df, lgbm_model, meta_artifact, hmm_data, primary_predictions
 
 @st.cache_data(show_spinner=False)
 def run_backtest_cached(selected_symbols, threshold, sl_mult, tp_mult):
-    df, lgbm_model, meta_model, hmm_data = load_models_and_data(tuple(selected_symbols))
+    df, lgbm_model, meta_artifact, hmm_data, primary_predictions = load_models_and_data(tuple(selected_symbols))
     # [V3.0 升級] 傳入 meta_model
-    bt = InstitutionalBacktester(df, lgbm_model, meta_model, hmm_data)
+    bt = InstitutionalBacktester(
+        df,
+        lgbm_model,
+        meta_artifact,
+        hmm_data,
+        primary_predictions=primary_predictions,
+        require_oos_predictions=True,
+    )
     bt.params['threshold'] = threshold
     bt.params['sl_mult'] = sl_mult
     bt.params['tp_mult'] = tp_mult
@@ -45,19 +59,72 @@ def run_backtest_cached(selected_symbols, threshold, sl_mult, tp_mult):
 st.sidebar.image("https://img.icons8.com/fluency/96/artificial-intelligence.png", width=60)
 st.sidebar.title("AlphaBase V3.0 控制")
 st.sidebar.subheader("🎯 選擇投資組合")
+if not available_symbols:
+    st.error("無法連線資料庫或尚未初始化 market_data。請確認 DB 已啟動，並先執行 ETL 與模型訓練流程。")
+    st.stop()
+missing_artifacts = missing_required_artifacts()
+if missing_artifacts:
+    st.error(
+        "研究 artifacts 尚未完整產出，暫停績效儀表板以避免發布未驗證數字。"
+        f" 缺少: {', '.join(missing_artifacts)}。請先執行 README 的研究流程。"
+    )
+    st.stop()
+quality_status = research_quality_status()
 default_selections = available_symbols[:3] if len(available_symbols) >= 3 else available_symbols
 selected_symbols = st.sidebar.multiselect("股票池", options=available_symbols, default=default_selections)
 st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ 模型微調")
 threshold_val = st.sidebar.slider("主模型初篩門檻", 0.50, 0.70, BACKTEST_PARAMS['threshold'], 0.01)
 st.sidebar.markdown("---")
-st.sidebar.success("✅ **Meta-Labeling 次模型**: 啟動中\n\n✅ **HMM 崩盤防禦**: 啟動中\n\n✅ **半凱利公式 (Half-Kelly)**: 啟動中")
+st.sidebar.info("**Ranker 診斷**: 已接入\n\n**HMM 過濾**: 已接入\n\n**倉位**: Ranker 使用 top-k 固定選擇；Kelly 僅適用舊 binary/meta path")
 st.title("AlphaBase 量化戰情室 V3.0 📊")
-st.markdown("全球頂級對沖基金架構：**主模型找機會 ➜ Meta 模型算勝率 ➜ 凱利公式定注碼 ➜ HMM 避股災**")
+st.markdown("互動檢視：**主模型找機會 ➜ Meta 模型算勝率 ➜ 校準通過才使用 Kelly ➜ HMM 避股災**")
+st.info(
+    "此頁可調整參數做互動回測，正式績效請以固定研究報告為準："
+    f"`{RESEARCH_CONFIG['artifact_paths']['report']}`。"
+)
+if quality_status.get("strategy_candidate_gate_passed", False):
+    st.info(
+        "Ranker 已通過內部 candidate gate："
+        f"ML 相對 momentum = {quality_status.get('strategy_summary', {}).get('ml_minus_momentum', 0):.4f}，"
+        f"勝出 folds = {quality_status.get('strategy_summary', {}).get('ml_beats_momentum_folds', 0)}/"
+        f"{quality_status.get('strategy_summary', {}).get('fold_count', 0)}。"
+        "這不是可部署策略批准；仍需資金、重疊持倉與交易成本回測。"
+    )
+else:
+    st.warning(
+        "Ranker 尚未通過內部 candidate gate；本頁結果僅供探索。"
+    )
+if not quality_status.get("primary_edge_approved", False):
+    st.caption(
+        "診斷：legacy binary classifier AUC gate 未通過；ranker candidate gate 為獨立排名診斷。"
+    )
 if not selected_symbols: st.stop()
 with st.spinner('🚀 正在運行雙重 AI 與凱利動態回測...'):
-    equity_df, trades_df = run_backtest_cached(selected_symbols, threshold_val, BACKTEST_PARAMS['sl_mult'], BACKTEST_PARAMS['tp_mult'])
-if equity_df.empty or trades_df.empty: st.stop()
+    try:
+        equity_df, trades_df = run_backtest_cached(selected_symbols, threshold_val, BACKTEST_PARAMS['sl_mult'], BACKTEST_PARAMS['tp_mult'])
+    except FileNotFoundError as exc:
+        st.error(f"找不到必要模型檔：{exc.filename}。請依序執行 quant_engine.py、meta_engine.py、hmm_engine.py。")
+        st.stop()
+    except Exception as exc:
+        logger.error(f"回測執行失敗: {exc}")
+        st.error(f"回測執行失敗：{exc}")
+        st.stop()
+if equity_df.empty:
+    st.warning("此參數組合沒有可顯示的資產曲線。")
+    st.stop()
+if trades_df.empty:
+    final_cap = equity_df['equity'].iloc[-1]
+    total_ret = (final_cap / BACKTEST_PARAMS['initial_capital']) - 1
+    st.warning("此互動回測在目前校準門檻與風控設定下沒有產生交易。")
+    col1, col2 = st.columns(2)
+    col1.metric("最終資產", f"${final_cap:,.0f}", f"{total_ret:.2%}")
+    col2.metric("總交易次數", "0 次")
+    st.plotly_chart(
+        px.line(equity_df, x=equity_df.index, y='equity', title='資金曲線 (無交易)', template='plotly_dark'),
+        use_container_width=True,
+    )
+    st.stop()
 final_cap = equity_df['equity'].iloc[-1]
 total_ret = (final_cap / BACKTEST_PARAMS['initial_capital']) - 1
 cum_max = equity_df['equity'].cummax()
@@ -134,13 +201,16 @@ sortino_ratio = (daily_returns.mean() * 252) / (downside_returns.std() * np.sqrt
 gross_profit = trades_df[trades_df['pnl'] > 0]['pnl'].sum()
 gross_loss = abs(trades_df[trades_df['pnl'] < 0]['pnl'].sum())
 profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
+avg_win = wins['pnl'].mean()
+avg_loss = trades_df[trades_df['pnl'] < 0]['pnl'].mean()
+payoff_ratio = avg_win / abs(avg_loss) if pd.notna(avg_win) and pd.notna(avg_loss) and avg_loss < 0 else None
 
 # 2. 顯示高階指標卡片
 met1, met2, met3, met4 = st.columns(4)
 met1.metric("夏普指標 (Sharpe)", f"{sharpe_ratio:.2f}", help=">1.5為優，>2.0為極神")
 met2.metric("索提諾指標 (Sortino)", f"{sortino_ratio:.2f}", help=">2.0為優，衡量下檔風險")
-met3.metric("獲利因子 (Profit Factor)", f"{profit_factor:.2f}", help=">1.5為穩健，>2.0代表賺多賠少")
-met4.metric("平均盈虧比 (Payoff Ratio)", f"{trades_df[trades_df['pnl']>0]['pnl'].mean() / abs(trades_df[trades_df['pnl']<0]['pnl'].mean()):.2f}", help="每筆獲利/每筆虧損的大小")
+met3.metric("獲利因子 (Profit Factor)", "N/A" if np.isinf(profit_factor) else f"{profit_factor:.2f}", help=">1.5為穩健，>2.0代表賺多賠少")
+met4.metric("平均盈虧比 (Payoff Ratio)", "N/A" if payoff_ratio is None else f"{payoff_ratio:.2f}", help="每筆獲利/每筆虧損的大小")
 
 col_c, col_d = st.columns(2)
 

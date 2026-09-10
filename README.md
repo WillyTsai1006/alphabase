@@ -1,43 +1,54 @@
-# 📈 AlphaBase V3.0: Dual-AI Institutional Quant System
+# 📈 AlphaBase V3.0: Walk-Forward Quant Research Prototype
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15.0-blue.svg)
-![Dual-AI](https://img.shields.io/badge/Machine_Learning-Dual_LightGBM-green.svg)
+![TimescaleDB](https://img.shields.io/badge/TimescaleDB-pg14-blue.svg)
+![Machine Learning](https://img.shields.io/badge/Machine_Learning-LightGBM-green.svg)
 ![Risk](https://img.shields.io/badge/Risk_Management-HMM_%2B_Kelly-red.svg)
 ![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-orange.svg)
 ![Optuna](https://img.shields.io/badge/Optimization-Optuna-orange.svg)
 
-AlphaBase is a state-of-the-art, event-driven quantitative trading system. Version 3.0 upgrades the architecture to a **Dual-AI (Primary + Meta-Model)** framework, widely used by top-tier hedge funds (e.g., Renaissance Technologies, Bridgewater), combining alpha generation with rigorous probability calibration.
+AlphaBase is an event-driven quantitative research prototype. Version 3.0 experiments with a **Primary + Meta-Model** workflow, HMM market-state filtering, and calibration-gated position sizing. These components are research paths, not evidence of a production-ready trading system.
 
-## ✨ System Architecture (V3.0 終極架構)
+## ✨ Research Architecture
 
-The system is built upon four professional-grade pillars:
+The repository contains four experimental components:
 
-1. **High-Performance Data Pipeline (PostgreSQL)**
-   - **Push-down Computing**: Calculates Technical Indicators (RSI, Bollinger Bands, Moving Averages) directly in the SQL database using Window Functions, reducing Python memory usage by >90%.
-   - **Incremental ETL**: Daily updates complete in < 10 seconds.
+1. **Data Pipeline (PostgreSQL)**
+   - **Push-down Computing**: Calculates RSI, Bollinger Bands, moving averages, and returns directly in SQL window functions.
+   - **Incremental ETL**: Updates each configured symbol from the last stored date.
 
 2. **Dual-AI Engine (Machine Learning)**
    - **Primary Model (LightGBM)**: Scans the market for Alpha opportunities using the **Triple Barrier Method** and **Purged Time-Series K-Fold** to prevent look-ahead bias.
-   - 🌟 **Meta-Model (Probability Calibration)**: A secondary AI that analyzes the Primary Model's predictions, filtering out false positives and accurately predicting the true probability of success (Meta-Labeling by Marcos Lopez de Prado).
+   - **Meta-Model (Probability Review)**: A secondary model analyzes Primary Model predictions, filters false positives, and writes a calibration report before Kelly sizing is trusted.
 
 3. **Dynamic Risk Management (HMM Market Radar)**
    - Utilizes **Hidden Markov Models (HMM)** to monitor the S&P 500 (SPY).
    - Automatically detects Systemic Crashes and triggers the "Go-to-Cash" protocol, locking all positions and overriding AI buy signals.
 
 4. **Execution & Capital Allocation (Kelly Criterion)**
-   - **Half-Kelly Betting**: Dynamically allocates 0% to 30% of total capital per trade based on the precise probability supplied by the Meta-Model, maximizing compound growth (Geometric Brownian Motion).
+   - **Calibration-gated sizing**: Uses Half-Kelly only when the saved Meta artifact passes Brier score and expected calibration error limits; otherwise falls back to fixed fractional sizing.
    - **T+1 Realistic Execution**: Simulates live trading environments with T+1 open execution, incorporating 0.1% slippage and commission costs.
 
-## 📊 Backtest Performance (120x Return)
+## 📊 Reproducible Research Status
 
-Under strict out-of-sample (OOS) testing with transaction costs, the V3.0 portfolio (AAPL, MSFT, NVDA, AMZN, GOOGL) achieved extraordinary compounding effects:
+The current purged-label report shows that the binary AUC gate did not pass. The ranker beat momentum in 8 of 12 folds, but its mean relative return was lower than momentum, so the internal candidate gate also did not pass. The previously saved Meta-model calibration did not pass its Kelly-sizing limits; the Meta artifact has not yet been rebuilt under the current research ID.
 
-- **Initial Capital**: $100,000
-- **Final Equity**: **$12,146,937.44**
-- **Total Return**: **12,046.93% (120x)**
-- **Meta-Calibrated Win Rate**: **> 70%** (Noise filtered by Meta-Model)
-- **Max Drawdown**: Maintained at institutional standards via HMM crash detection.
+The top-k comparison remains a ranking diagnostic: it uses overlapping forward returns and is not a capital-aware portfolio backtest.
+
+Performance claims are intentionally not hard-coded in this README. Publish return, win-rate, and drawdown only from the fixed research protocol:
+
+- Fixed data interval: `2016-01-01` to `2025-12-31`
+- Fixed universe: `AAPL, MSFT, NVDA, GOOGL, AMZN, SPY, INTC, PYPL, PFE, ZM`
+- Current artifacts: `artifacts/research/alphabase_v3_research_2026_09_purged/`
+- Superseded pre-purge artifacts: `artifacts/research/alphabase_v3_research_2026_05/`
+- Required validation: walk-forward / rolling retrain folds plus Meta calibration report
+- Report path: `docs/research/backtest_report.md`
+
+Generate or refresh the report with:
+
+```bash
+python3 scripts/generate_research_report.py
+```
 
 ### 🖥️ Interactive Dashboard
 
@@ -49,20 +60,34 @@ Under strict out-of-sample (OOS) testing with transaction costs, the V3.0 portfo
 ```bash
    pip install -r requirements.txt
 ```
-2. Setup Database: Configure your PostgreSQL credentials in config.py.
+2. **Setup environment and database**:
+```bash
+cp .env.example .env
+docker compose up -d
+```
+
+The defaults in `.env.example` match `docker-compose.yml`. Override `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, and `DB_NAME` for other PostgreSQL/TimescaleDB instances.
 
 3. Run ETL & Train the "Three Brains":
 
-```Bash
-python src/data_loader.py
-python src/quant_engine.py  # Train Primary AI
-python src/meta_engine.py   # Train Meta AI
-python src/hmm_engine.py    # Train Macro HMM
+```bash
+python3 src/data_loader.py
+python3 scripts/run_walk_forward_research.py
+python3 src/quant_engine.py  # Train Primary AI
+python3 src/meta_engine.py   # Train Meta AI and save its threshold
+python3 src/hmm_engine.py    # Train Macro HMM
+python3 scripts/generate_research_report.py
 ```
 4. Launch the Quant Dashboard:
 
-```Bash
+```bash
 streamlit run src/app.py
+```
+
+5. Run checks:
+```bash
+python3 -m compileall src
+python3 -m pytest
 ```
 
 ## 🔮 Future Work
@@ -82,13 +107,12 @@ streamlit run src/app.py
 
 其中 $\sigma_t$ 為動態波動率，$M$ 為乘數。
 
-標籤 $Y_i$ 根據價格路徑 $P_{t \to T}$ **首先觸碰到**的邊界決定：
+標籤 $Y_i$ 根據價格路徑 $P_{t \to T}$ **首先觸碰到**的邊界決定。實作目前使用二元分類：上方邊界為 `1`；下方邊界或到期未勝出為 `0`。
 
 $$
-Y_i = \begin{cases} 
+Y_i = \begin{cases}
 1 & \text{if touches Upper Barrier first (Win)} \\
--1 & \text{if touches Lower Barrier first (Loss)} \\
-0 & \text{if touches Vertical Barrier (Time out)}
+0 & \text{if touches Lower Barrier first or times out}
 \end{cases}
 $$
 ## 📬 Contact

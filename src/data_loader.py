@@ -1,7 +1,6 @@
 import yfinance as yf
 import pandas as pd
 from sqlalchemy import text
-import time
 from datetime import datetime, timedelta
 # 導入共用配置與工具
 from config import TARGET_SYMBOLS
@@ -59,28 +58,35 @@ def init_symbols():
 def fetch_incremental(symbol):
     """增量下載邏輯"""
     logger.info(f"🔍 檢查 {symbol} 的數據狀態...")
-    with db_manager.engine.connect() as conn:
-        last_date = conn.execute(text("SELECT MAX(time) FROM market_data WHERE symbol = :symbol"), {"symbol": symbol}).scalar()
-    start_date = (pd.to_datetime(last_date) + timedelta(days=1)).strftime('%Y-%m-%d') if last_date else DEFAULT_START_DATE
-    if start_date >= datetime.now().strftime('%Y-%m-%d'):
-        return True
-    df = yf.download(symbol, start=start_date, progress=False)
-    if df.empty: return True
-    df.reset_index(inplace=True)
-    if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
-    df.rename(columns={k: v for k, v in {'Date': 'time', 'Open': 'open', 'High': 'high', 'Low': 'low', 'Close': 'close', 'Volume': 'volume'}.items() if k in df.columns}, inplace=True)
-    if df['time'].dt.tz is not None: df['time'] = df['time'].dt.tz_localize(None)
-    df['symbol'] = symbol
-    df = df[[col for col in ['time', 'open', 'high', 'low', 'close', 'volume', 'symbol'] if col in df.columns]]
-    df = df[df['volume'] > 0]
-    if last_date:
-        df = df[df['time'] > pd.to_datetime(last_date)]
-    if not df.empty:
-        df.to_sql('market_data', db_manager.engine, if_exists='append', index=False, chunksize=2000)
-        logger.info(f"✅ 成功寫入 {len(df)} 筆 {symbol} 新數據。")
-    else:
+    try:
+        with db_manager.engine.connect() as conn:
+            last_date = conn.execute(text("SELECT MAX(time) FROM market_data WHERE symbol = :symbol"), {"symbol": symbol}).scalar()
+        start_date = (pd.to_datetime(last_date) + timedelta(days=1)).strftime('%Y-%m-%d') if last_date else DEFAULT_START_DATE
+        if start_date >= datetime.now().strftime('%Y-%m-%d'):
+            logger.info(f"ℹ️ {symbol} 已是最新資料。")
+            return True
+        df = yf.download(symbol, start=start_date, progress=False)
+        if df.empty:
+            logger.warning(f"⚠️ {symbol} 下載結果為空，未更新資料。")
+            return False
+        df.reset_index(inplace=True)
+        if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
+        df.rename(columns={k: v for k, v in {'Date': 'time', 'Open': 'open', 'High': 'high', 'Low': 'low', 'Close': 'close', 'Volume': 'volume'}.items() if k in df.columns}, inplace=True)
+        if df['time'].dt.tz is not None: df['time'] = df['time'].dt.tz_localize(None)
+        df['symbol'] = symbol
+        df = df[[col for col in ['time', 'open', 'high', 'low', 'close', 'volume', 'symbol'] if col in df.columns]]
+        df = df[df['volume'] > 0]
+        if last_date:
+            df = df[df['time'] > pd.to_datetime(last_date)]
+        if not df.empty:
+            df.to_sql('market_data', db_manager.engine, if_exists='append', index=False, chunksize=2000)
+            logger.info(f"✅ 成功寫入 {len(df)} 筆 {symbol} 新數據。")
+            return True
         logger.info(f"ℹ️ {symbol} 過濾後無新數據需寫入。")
-    return True
+        return True
+    except Exception as exc:
+        logger.error(f"❌ {symbol} 更新失敗: {exc}")
+        return False
 
 if __name__ == "__main__":
     init_db_schema()

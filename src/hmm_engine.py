@@ -3,9 +3,11 @@ import numpy as np
 import joblib
 import warnings
 from hmmlearn.hmm import GaussianHMM
+from sqlalchemy import text
 # 導入 V2 共用配置與工具
-from config import BENCHMARK_SYMBOL, MODEL_PATHS
+from config import BENCHMARK_SYMBOL, MODEL_PATHS, RESEARCH_CONFIG
 from utils import get_logger, db_manager
+from pathlib import Path
 warnings.filterwarnings('ignore')
 logger = get_logger("HMMEngine")
 
@@ -21,14 +23,14 @@ class MarketRegimeModel:
         """從 PostgreSQL 獲取 SPY (大盤) 數據並計算總經特徵"""
         logger.info(f"📥 正在從資料庫獲取 {BENCHMARK_SYMBOL} (大盤) 數據...")
         # 安全地透過 SQL 獲取收盤價與計算日報酬率
-        query = f"""
+        query = """
         SELECT time, close, 
                LN(close / NULLIF(LAG(close, 1) OVER (ORDER BY time), 0)) as log_return
         FROM market_data 
-        WHERE symbol = '{BENCHMARK_SYMBOL}' 
+        WHERE symbol = :symbol
         ORDER BY time ASC
         """
-        df = pd.read_sql(query, db_manager.engine)
+        df = pd.read_sql(text(query), db_manager.engine, params={'symbol': BENCHMARK_SYMBOL})
         df['time'] = pd.to_datetime(df['time'])
         df = df.set_index('time')
         # 特徵工程：計算 5 日波動率
@@ -44,11 +46,16 @@ class MarketRegimeModel:
         df['regime'] = self.model.predict(X)
         # 統計每個狀態的「平均報酬率」與「平均波動率」
         stats = df.groupby('regime')[['log_return', 'volatility_5d']].mean()
-        # 智慧命名邏輯：
-        # 波動率最高、風險最大的狀態 = Crash (崩盤市)
-        crash_regime = stats['volatility_5d'].idxmax()
-        # 報酬率最高的狀態 = Bull (牛市)
-        bull_regime = stats['log_return'].idxmax()
+        # 智慧命名邏輯：Crash 不只看波動，也懲罰正報酬，避免高波動上漲期被誤命名。
+        vol_span = stats['volatility_5d'].max() - stats['volatility_5d'].min()
+        ret_span = stats['log_return'].max() - stats['log_return'].min()
+        vol_score = (stats['volatility_5d'] - stats['volatility_5d'].min()) / (vol_span if vol_span else 1)
+        ret_score = (stats['log_return'] - stats['log_return'].min()) / (ret_span if ret_span else 1)
+        risk_score = vol_score - ret_score
+        crash_regime = risk_score.idxmax()
+        # 報酬率最高的狀態 = Bull (牛市)，但不可與 Crash 重疊
+        bull_candidates = stats.drop(index=crash_regime)
+        bull_regime = bull_candidates['log_return'].idxmax()
         # 剩下的就是 Sideways (震盪市)
         sideways_regime = [r for r in range(self.n_components) if r not in [crash_regime, bull_regime]][0]
         # 建立狀態映射表
@@ -64,8 +71,16 @@ class MarketRegimeModel:
 
     def save_model(self):
         """保存模型與狀態映射表"""
-        data = {'model': self.model, 'map': self.regime_map}
+        data = {
+            'model': self.model,
+            'map': self.regime_map,
+            'train_end': RESEARCH_CONFIG['hmm_train_end'],
+            'oos_start': RESEARCH_CONFIG['hmm_oos_start'],
+        }
         joblib.dump(data, MODEL_PATHS['hmm'])
+        research_path = RESEARCH_CONFIG['artifact_paths']['hmm_model']
+        Path(research_path).parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(data, research_path)
         logger.info(f"💾 HMM 模型已保存至 {MODEL_PATHS['hmm']}")
 
 if __name__ == "__main__":
@@ -73,7 +88,7 @@ if __name__ == "__main__":
     spy_df = hmm.fetch_spy_data()
     # 為了防止「未來函數」，我們只用 2023 年以前的歷史數據來訓練大盤規律
     # 這樣回測 2023-2025 年時，HMM 才是用「未知的眼光」在看盤
-    train_df = spy_df[spy_df.index < '2023-01-01']
+    train_df = spy_df[spy_df.index <= RESEARCH_CONFIG['hmm_train_end']]
     if len(train_df) > 100:
         hmm.train_and_identify(train_df)
         hmm.save_model()

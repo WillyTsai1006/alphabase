@@ -1,24 +1,25 @@
 # Data Engineering & Database
-pandas>=1.5.0
-numpy>=1.23.0
-sqlalchemy>=1.4.0
-psycopg2-binary>=2.9.0
-yfinance>=0.2.0
+pandas==3.0.3
+numpy==2.4.4
+sqlalchemy==2.0.49
+psycopg2-binary==2.9.12
+yfinance==1.3.0
 
 # Machine Learning & Optimization
-lightgbm>=3.3.0
-scikit-learn>=1.2.0
-optuna>=3.0.0
-joblib>=1.2.0
+lightgbm==4.6.0
+scikit-learn==1.8.0
+optuna==4.8.0
+joblib==1.5.3
 
 # Scientific Computing & Visualization
-scipy>=1.9.0
-matplotlib>=3.6.0
+scipy==1.17.1
+matplotlib==3.10.9
 
 # Utilities
-python-dotenv>=1.0.0
-tqdm>=4.65.0
+python-dotenv==1.2.2
+tqdm==4.67.3
 
-hmmlearn
-streamlit 
-plotly
+hmmlearn==0.3.3
+streamlit==1.57.0
+plotly==6.7.0
+pytest==9.0.3

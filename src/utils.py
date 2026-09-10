@@ -25,7 +25,7 @@ class DatabaseManager:
         """單例模式 (Singleton)，確保整個程式只建立一個資料庫連線"""
         if cls._instance is None:
             cls._instance = super(DatabaseManager, cls).__new__(cls)
-            cls._instance.engine = create_engine(DB_URI)
+            cls._instance.engine = create_engine(DB_URI, pool_pre_ping=True)
             cls._instance.logger = get_logger("Database")
         return cls._instance
 
