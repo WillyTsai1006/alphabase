@@ -35,6 +35,8 @@ The current purged-label report shows that the binary AUC gate did not pass. The
 
 The top-k comparison remains a ranking diagnostic: it uses overlapping forward returns and is not a capital-aware portfolio backtest.
 
+A separate QQQ/GLD inverse-volatility allocation has passed its initial risk-adjusted validation and a short 2024-2025 candidate-specific holdout. It remains a paper-trading candidate rather than proof of persistent alpha; see [`docs/research/portfolio_strategy_report.md`](docs/research/portfolio_strategy_report.md) for the locked protocol, results, and limitations.
+
 Performance claims are intentionally not hard-coded in this README. Publish return, win-rate, and drawdown only from the fixed research protocol:
 
 - Fixed data interval: `2016-01-01` to `2025-12-31`
